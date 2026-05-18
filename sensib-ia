@@ -1,3 +1,102 @@
+
+# Sensibilisation SSI - Volet Intelligence Artificielle
+
+## 🎯 Plan suggéré
+
+---
+
+## PARTIE 1 - IA en usage général
+
+### ⚠️ Risques principaux
+
+**Fuite de données confidentielles**
+- Saisir des données sensibles dans ChatGPT, Copilot, Gemini = potentiellement intégré aux données d'entraînement
+- Exemples concrets : code source, données clients, documents internes, contrats
+
+**Hallucinations**
+- L'IA invente des faits, des sources, des lois
+- Risque de décisions basées sur des informations fausses
+
+**Hameçonnage augmenté**
+- Mails de phishing quasi parfaits générés par IA
+- Deepfakes audio/vidéo → faux ordres de virement, usurpation de dirigeants
+
+**Shadow AI**
+- Utilisation d'outils IA non approuvés par la DSI
+- Contournement des politiques de sécurité
+
+---
+
+### ✅ Bonnes pratiques utilisateurs
+
+| À faire | À éviter |
+|--------|----------|
+| Utiliser les outils validés par la DSI | Coller des données clients dans ChatGPT |
+| Anonymiser avant de soumettre | Faire confiance aveuglément aux réponses |
+| Vérifier les informations générées | Utiliser son compte perso sur des outils publics |
+| Signaler les usages suspects | Partager des accès IA professionnels |
+
+---
+
+## PARTIE 2 - IA pour les développeurs
+
+### ⚠️ Risques spécifiques dev
+
+**Injection de code malveillant**
+- Le code suggéré par l'IA peut contenir des vulnérabilités
+- Dépendances obsolètes ou compromises suggérées automatiquement
+- *Prompt injection* : manipulation de l'IA via des entrées utilisateur
+
+**Fuite de secrets**
+- Copier-coller de code avec des **tokens, clés API, mots de passe** dans un prompt
+- GitHub Copilot peut suggérer des secrets issus de dépôts publics
+
+**Dépendance & perte de maîtrise**
+- Code non compris = code non auditable
+- Difficulté à détecter les failles dans du code généré
+
+**Supply chain**
+- L'IA peut suggérer des packages inexistants (*hallucination de librairies*)
+- Un attaquant peut créer ce package malveillant → **AI Package Hallucination Attack**
+
+---
+
+### ✅ Bonnes pratiques dev
+
+```
+✔ Relire et comprendre TOUT code généré par l'IA
+✔ Scanner le code avec vos outils SAST habituels
+✔ Ne jamais soumettre de secrets/credentials dans un prompt
+✔ Vérifier l'existence et la légitimité des packages suggérés
+✔ Utiliser des environnements isolés pour tester le code IA
+✔ Traiter le code IA comme du code tiers non audité
+```
+
+---
+
+### 🔴 Cas concret à présenter
+
+> Un développeur utilise GitHub Copilot et lui soumet une fonction avec une clé API en clair pour "aller plus vite". La clé est exposée, le dépôt est public → **compromission en moins de 2 minutes** (cas documentés réels)
+
+---
+
+## 📋 Messages clés à retenir
+
+1. **L'IA n'est pas une boîte noire sûre** → ce que vous soumettez peut ressortir
+2. **L'IA se trompe** → vérifiez toujours
+3. **L'IA amplifie les attaques** → phishing, deepfake, social engineering
+4. **Code généré ≠ code sécurisé** → même règles de revue que le reste
+5. **Utilisez uniquement les outils approuvés** par votre organisation
+
+---
+
+Vous voulez que je développe une section en particulier, que j'ajoute des **slides**, des **quiz**, ou des **exemples d'incidents réels** ?
+
+
+
+
+
+
 # Pourquoi l'IA peut retranscrire vos données et les risques associés
 
 ## 🔍 Comment ça fonctionne techniquement
