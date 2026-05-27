@@ -847,3 +847,214 @@ spec:
 - **Vous voulez former votre équipe ?** → Contactez-moi pour des ateliers pratiques !
 
 🚀 **Restez paranoïaque, mais constructif.**
+
+
+
+
+# Sensibilisation SSI - Postes "Hors Contrôle"
+## ⚠️ Contexte particulier
+
+---
+
+## 🚨 La situation
+
+> Vous travaillez sur un poste où vous avez **tous les droits**
+> et où **l'équipe SSI n'a pas encore la main**
+>
+> C'est une situation **à risque élevé**
+> non pas parce que vous êtes malveillants
+> mais parce que **vous êtes une cible privilégiée**
+
+---
+
+## 😈 Pourquoi ces postes sont une cible
+
+```
+Poste non géré par la DSI/SSI
+        ↓
+Pas d'antivirus centralisé
+Pas de mises à jour forcées
+Pas de chiffrement garanti
+Pas de détection d'intrusion
+Pas de blocage des sites malveillants
+        ↓
+= Paradis pour un attaquant
+```
+
+---
+
+## 🔴 Les risques concrets
+
+### 1. Vous installez n'importe quoi
+```
+Tentations courantes :
+→ Logiciel craqué / keygen
+→ Plugin navigateur "pratique"
+→ Outil trouvé sur un forum
+→ Fichier partagé par un collègue via WhatsApp
+
+Réalité :
+→ 1 logiciel cracké sur 2 contient un malware
+→ Les keygens sont des vecteurs d'infection classiques
+→ Un plugin malveillant voit TOUT ce que vous tapez
+   (mots de passe, données bancaires, données pro)
+```
+
+### 2. Vous êtes admin = le malware aussi
+```
+Vous avez tous les droits
+        ↓
+Si un malware s'installe
+        ↓
+Il hérite de VOS droits
+        ↓
+Il peut :
+→ S'installer en profondeur dans le système
+→ Désactiver les protections
+→ Se propager sur le réseau de l'entreprise
+→ Chiffrer tous vos fichiers (ransomware)
+→ Exfiltrer toutes vos données
+```
+
+### 3. Le poste se connecte au réseau entreprise
+```
+Poste compromis
+        ↓
+Connecté au VPN ou réseau interne
+        ↓
+L'attaquant a un pied dans le réseau
+        ↓
+Propagation latérale vers d'autres machines
+        ↓
+= Une brèche qui vient de VOTRE poste
+```
+
+---
+
+## 📋 Les bonnes pratiques adaptées à votre situation
+
+### 🔒 Sécurité du poste
+
+```
+✔ Installez un antivirus (Windows Defender bien configuré 
+  suffit comme base)
+✔ Activez le chiffrement du disque (BitLocker sur Windows)
+✔ Faites vos mises à jour OS et logiciels régulièrement
+✔ N'installez que des logiciels de sources officielles
+✔ Créez un second compte sans droits admin 
+  pour votre usage quotidien
+```
+
+> 💡 **Astuce clé** : Utilisez votre compte admin UNIQUEMENT
+> pour les installations, pas pour naviguer ou travailler
+
+---
+
+### 🌐 Sécurité navigateur
+
+```
+✔ Utilisez un navigateur à jour (Firefox ou Chrome)
+✔ Installez uBlock Origin (bloqueur de pub et malwares)
+✔ Méfiez vous des extensions : moins = mieux
+✔ N'acceptez jamais les notifications de sites inconnus
+✔ Vérifiez toujours l'URL avant de saisir un mot de passe
+```
+
+---
+
+### 🔑 Gestion des mots de passe
+
+```
+✔ Utilisez un gestionnaire de mots de passe
+  (Bitwarden gratuit et open source)
+✔ Un mot de passe différent par service
+✔ Activez le MFA partout où c'est possible
+✔ Ne stockez JAMAIS un mot de passe dans un fichier texte
+  ou un post-it
+```
+
+---
+
+### 📁 Données professionnelles
+
+```
+✔ Ne stockez pas de données sensibles uniquement 
+  en local sur ce poste
+✔ Sauvegardez régulièrement (règle 3-2-1)
+✔ Ne mélangez pas usage perso et pro sur le même poste
+✔ Signalez à la SSI si vous détectez quelque chose d'anormal
+```
+
+---
+
+### 🤖 IA et outils en ligne
+
+```
+✔ Ne soumettez jamais de données confidentielles 
+  à une IA publique
+✔ Méfiez vous des outils en ligne "gratuits" 
+  qui demandent des accès à vos fichiers
+✔ Si c'est gratuit, vous êtes le produit
+```
+
+---
+
+## 🧠 Les réflexes à avoir
+
+### Avant d'installer quelque chose
+```
+Posez vous ces questions :
+→ Est ce que j'en ai vraiment besoin ?
+→ Est ce que ça vient d'une source officielle ?
+→ Est ce que mes collègues utilisent déjà cet outil ?
+→ Est ce que la SSI a validé ce type d'outil ?
+
+Si vous avez un doute → Ne l'installez pas
+                      → Demandez à la SSI
+```
+
+### Si quelque chose d'anormal se produit
+```
+Signes d'alerte :
+→ Poste anormalement lent
+→ Processus inconnus dans le gestionnaire de tâches
+→ Fichiers chiffrés ou inaccessibles
+→ Navigateur redirigé vers des sites inconnus
+→ Antivirus désactivé tout seul
+
+Réaction :
+→ Déconnectez le poste du réseau immédiatement
+→ Ne l'éteignez pas (préservation des preuves)
+→ Contactez la SSI immédiatement
+```
+
+---
+
+## 💬 Le message à retenir
+
+> **Avoir tous les droits sur un poste
+> c'est une responsabilité, pas un privilège**
+>
+> Si votre poste est compromis
+> ce n'est pas qu'un problème personnel
+> **c'est une menace pour toute l'organisation**
+
+---
+
+## 📞 Réflexe final
+
+```
+Dans le doute ?
+
+→ Ne cliquez pas
+→ Ne installez pas
+→ Contactez la SSI
+
+Mieux vaut demander et avoir l'air bête
+que ne pas demander et mettre en danger
+toute l'entreprise
+```
+
+---
+
+Voulez-vous que j'adapte le **ton** (plus technique, plus grand public), que j'ajoute des **quiz**, ou que je le formate en **support de présentation** ?
