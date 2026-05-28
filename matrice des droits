@@ -997,3 +997,146 @@ Write-Host "Export terminé : $fichier" -ForegroundColor Green
 | Volets | Figés sur ligne 2, colonne 2 |
 
 > ⚙️ **Adaptez les conditions** dans `Get-GroupColor` selon vos vrais préfixes de groupes !
+
+
+
+
+
+
+
+
+
+
+
+
+
+```powershell
+function Get-ExcelColor($r, $g, $b) {
+    return $r + ($g * 256) + ($b * 65536)
+}
+
+# Panel de 5 couleurs qui se répètent
+$palette = @(
+    (Get-ExcelColor 189 215 238),  # Bleu clair
+    (Get-ExcelColor 198 239 206),  # Vert clair
+    (Get-ExcelColor 255 235 156),  # Jaune
+    (Get-ExcelColor 255 199 206),  # Rouge clair
+    (Get-ExcelColor 226 198 255)   # Violet clair
+)
+
+# Récupération des groupes
+$groupes = Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} | Sort-Object Name
+
+# Récupération des utilisateurs
+$utilisateurs = $groupes | ForEach-Object {
+    Get-ADGroupMember -Identity $_ -Recursive | Where-Object { $_.objectClass -eq "user" }
+} | Sort-Object SamAccountName | Select-Object -Unique -Property Name, SamAccountName
+
+# Construction de la matrice
+$matrice = foreach ($user in $utilisateurs) {
+    $userAD = Get-ADUser $user.SamAccountName -Properties MemberOf, DisplayName
+    $groupesUser = $userAD.MemberOf | ForEach-Object { (Get-ADGroup $_).Name }
+    $ligne = [ordered]@{ "Utilisateur" = $userAD.SamAccountName }
+    foreach ($groupe in $groupes) {
+        $ligne[$groupe.Name] = if ($groupesUser -contains $groupe.Name) { "+" } else { "" }
+    }
+    [PSCustomObject]$ligne
+}
+
+# ---- EXCEL VIA COM ----
+$excel = New-Object -ComObject Excel.Application
+$excel.Visible = $false
+$wb = $excel.Workbooks.Add()
+$ws = $wb.Worksheets.Item(1)
+$ws.Name = "Matrice Droits"
+
+$colonnes = $matrice[0].PSObject.Properties.Name
+
+# ---- EN-TÊTE ----
+for ($col = 0; $col -lt $colonnes.Count; $col++) {
+    $cell = $ws.Cells.Item(1, $col + 1)
+    $cell.Value2 = $colonnes[$col]
+    $cell.Font.Bold = $true
+    $cell.Font.Size = 8
+
+    if ($col -eq 0) {
+        $cell.Interior.Color = Get-ExcelColor 68 114 196
+        $cell.Font.Color = 0xFFFFFF
+        $cell.VerticalAlignment = -4107
+    } else {
+        # Couleur cyclique sur 5
+        $cell.Interior.Color = $palette[($col - 1) % 5]
+        $cell.Font.Color = Get-ExcelColor 0 0 0
+        $cell.Orientation = 90
+        $cell.VerticalAlignment = -4107
+        $cell.HorizontalAlignment = -4108
+    }
+}
+
+$ws.Rows.Item(1).RowHeight = 130
+
+# ---- DONNÉES ----
+for ($lig = 0; $lig -lt $matrice.Count; $lig++) {
+    $ligne = $matrice[$lig]
+    $excelLig = $lig + 2
+
+    for ($col = 0; $col -lt $colonnes.Count; $col++) {
+        $cell = $ws.Cells.Item($excelLig, $col + 1)
+        $valeur = $ligne.($colonnes[$col])
+        $cell.Value2 = $valeur
+        $cell.Font.Size = 8
+        $cell.Borders.LineStyle = 1
+        $cell.Borders.Weight = 1
+
+        if ($col -eq 0) {
+            $cell.Font.Bold = $false
+            if ($excelLig % 2 -eq 0) {
+                $cell.Interior.Color = Get-ExcelColor 210 210 210
+            } else {
+                $cell.Interior.Color = Get-ExcelColor 242 242 242
+            }
+        } elseif ($valeur -eq "+") {
+            $cell.Interior.Color = Get-ExcelColor 100 100 100  # Gris foncé
+            $cell.Font.Color = 0xFFFFFF
+            $cell.HorizontalAlignment = -4108
+            $cell.Font.Bold = $true
+        } else {
+            if ($excelLig % 2 -eq 0) {
+                $cell.Interior.Color = Get-ExcelColor 210 210 210
+            } else {
+                $cell.Interior.Color = Get-ExcelColor 242 242 242
+            }
+        }
+    }
+
+    $ws.Rows.Item($excelLig).RowHeight = 15
+}
+
+# ---- FIGER VOLETS ----
+$ws.Cells.Item(2, 2).Select()
+$excel.ActiveWindow.FreezePanes = $true
+
+# ---- LARGEUR COLONNES ----
+$ws.Columns.Item(1).ColumnWidth = 20
+for ($col = 2; $col -le $colonnes.Count; $col++) {
+    $ws.Columns.Item($col).ColumnWidth = 4
+}
+
+# ---- SAUVEGARDE ----
+$fichier = "C:\matrice_droits.xlsx"
+$wb.SaveAs($fichier)
+$wb.Close()
+$excel.Quit()
+[System.Runtime.InteropServices.Marshal]::ReleaseComObject($excel) | Out-Null
+
+Write-Host "Export terminé : $fichier" -ForegroundColor Green
+```
+
+**Changements clés :**
+
+| Élément | Style |
+|---|---|
+| En-têtes | 5 couleurs qui **se répètent cycliquement** avec `% 5` |
+| Lignes paires | Gris moyen `210 210 210` |
+| Lignes impaires | Gris très clair `242 242 242` |
+| Marqueur `+` | Gris foncé avec texte blanc |
