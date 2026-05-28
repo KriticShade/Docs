@@ -292,3 +292,57 @@ Après (colonne raccourcie) :
 ---
 
 Pouvez-vous me donner un exemple de nom complet de groupe ? (ex: `GG_F_CDAD-BDX_RH_Lecture`) pour qu'on adapte **le découpage intelligent** des colonnes selon votre convention de nommage ?
+
+
+
+
+
+
+
+
+
+
+
+# Commandes PowerShell directes
+
+## Groupes + tous leurs membres
+
+```powershell
+Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} | ForEach-Object { 
+    Write-Host "`n=== $($_.Name) ===" -ForegroundColor Cyan
+    Get-ADGroupMember -Identity $_ -Recursive | 
+    Where-Object {$_.objectClass -eq "user"} | 
+    Select-Object Name, SamAccountName | 
+    Format-Table -AutoSize 
+}
+```
+
+---
+
+## Utilisateur + tous ses groupes GG_F_CDAD-BDX
+
+```powershell
+Get-ADUser -Filter * -Properties MemberOf, DisplayName | ForEach-Object {
+    $groupes = $_.MemberOf | ForEach-Object { Get-ADGroup $_ } | 
+    Where-Object { $_.Name -like "GG_F_CDAD-BDX*" }
+    if ($groupes) {
+        Write-Host "`n=== $($_.DisplayName) ===" -ForegroundColor Yellow
+        $groupes | Select-Object Name | Format-Table -AutoSize
+    }
+}
+```
+
+---
+
+## Export rapide en CSV si besoin
+
+```powershell
+Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} | ForEach-Object {
+    $groupe = $_.Name
+    Get-ADGroupMember -Identity $_ -Recursive | 
+    Where-Object {$_.objectClass -eq "user"} | 
+    Select-Object @{N="Groupe";E={$groupe}}, Name, SamAccountName
+} | Export-Csv "C:\export.csv" -NoTypeInformation -Delimiter ";" -Encoding UTF8
+```
+
+> 💡 Lancez ces commandes **une par une** selon ce que vous voulez voir
