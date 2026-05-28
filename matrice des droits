@@ -388,3 +388,44 @@ $groupes = Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} | Select-Object Nam
 Write-Host "Nombre total de groupes : $($groupes.Count)" -ForegroundColor Green
 $groupes | Export-Csv "C:\export.csv" -NoTypeInformation -Delimiter ";" -Encoding UTF8
 ```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```powershell
+# Récupération des données
+$groupes = Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} | Sort-Object Name
+$utilisateurs = Get-ADUser -Filter * -Properties MemberOf, DisplayName | Sort-Object DisplayName
+
+# Construction de la matrice
+$matrice = foreach ($user in $utilisateurs) {
+    $groupesUser = $user.MemberOf | ForEach-Object { (Get-ADGroup $_).Name }
+    
+    $ligne = [ordered]@{ "Utilisateur" = $user.DisplayName }
+    
+    foreach ($groupe in $groupes) {
+        $ligne[$groupe.Name] = if ($groupesUser -contains $groupe.Name) { "X" } else { "" }
+    }
+    [PSCustomObject]$ligne
+}
+
+# Export
+$matrice | Export-Csv "C:\matrice.csv" -NoTypeInformation -Delimiter ";" -Encoding UTF8
+Write-Host "Export terminé : C:\matrice.csv" -ForegroundColor Green
+```
+
+> ✅ Le fichier Excel aura :
+> - **Colonne gauche** → nom des utilisateurs
+> - **Colonnes du haut** → chaque groupe `GG_F_CDAD-BDX*`
+> - **X** → là où l'utilisateur est membre du groupe
