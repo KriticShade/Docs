@@ -346,3 +346,24 @@ Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} | ForEach-Object {
 ```
 
 > 💡 Lancez ces commandes **une par une** selon ce que vous voulez voir
+
+
+
+
+
+
+
+
+```powershell
+Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} | ForEach-Object {
+    $groupe = $_.Name
+    Get-ADGroupMember -Identity $_ -Recursive | 
+    Where-Object {$_.objectClass -eq "user"} | 
+    Select-Object @{N="Groupe";E={$groupe}}, Name, SamAccountName
+} | Export-Csv "C:\export.csv" -NoTypeInformation -Delimiter ";" -Encoding UTF8
+```
+
+> ✅ Cette commande va :
+> - Chercher **tous les groupes** `GG_F_CDAD-BDX*`
+> - Lister **tous les utilisateurs** de chaque groupe
+> - Exporter dans **`C:\export.csv`** ouvrable directement dans Excel
