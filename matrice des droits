@@ -709,3 +709,128 @@ Write-Host "Export terminé : $fichier" -ForegroundColor Green
 | Fonctionnalités | ✅ Complètes | ✅ Complètes |
 
 > ⚠️ **COM Object** fonctionne uniquement si **Microsoft Excel est installé** sur la machine où tourne le script
+
+
+
+
+
+
+
+
+Les erreurs viennent de deux problèmes :
+
+1. `System.Drawing.ColorTranslator` **non disponible** nativement en PowerShell
+2. Une ligne de code incomplète que j'avais laissée par erreur
+
+**Il faut utiliser les couleurs en format BGR hexadécimal directement** avec COM Excel :
+
+```powershell
+# Fonction helper pour convertir RGB en BGR (format Excel COM)
+function Get-ExcelColor($r, $g, $b) {
+    return $r + ($g * 256) + ($b * 65536)
+}
+
+# Couleurs
+$couleurEnteteFond  = Get-ExcelColor 31  73  125   # Bleu foncé
+$couleurLignesPaire = Get-ExcelColor 220 230 241   # Bleu clair
+$couleurX           = Get-ExcelColor 0   176 80    # Vert
+
+# Récupération des groupes
+$groupes = Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} | Sort-Object Name
+
+# Récupération des utilisateurs
+$utilisateurs = $groupes | ForEach-Object {
+    Get-ADGroupMember -Identity $_ -Recursive | Where-Object { $_.objectClass -eq "user" }
+} | Sort-Object Name | Select-Object -Unique -Property Name, SamAccountName, distinguishedName
+
+# Construction de la matrice
+$matrice = foreach ($user in $utilisateurs) {
+    $userAD = Get-ADUser $user.SamAccountName -Properties MemberOf, DisplayName
+    $groupesUser = $userAD.MemberOf | ForEach-Object { (Get-ADGroup $_).Name }
+    $ligne = [ordered]@{ "Utilisateur" = $userAD.DisplayName }
+    foreach ($groupe in $groupes) {
+        $ligne[$groupe.Name] = if ($groupesUser -contains $groupe.Name) { "X" } else { "" }
+    }
+    [PSCustomObject]$ligne
+}
+
+# ---- EXCEL VIA COM ----
+$excel = New-Object -ComObject Excel.Application
+$excel.Visible = $false
+$wb = $excel.Workbooks.Add()
+$ws = $wb.Worksheets.Item(1)
+$ws.Name = "Matrice Droits"
+
+$colonnes = $matrice[0].PSObject.Properties.Name
+
+# ---- EN-TÊTE ----
+for ($col = 0; $col -lt $colonnes.Count; $col++) {
+    $cell = $ws.Cells.Item(1, $col + 1)
+    $cell.Value2 = $colonnes[$col]
+    $cell.Font.Bold = $true
+    $cell.Font.Color = 0xFFFFFF          # Blanc
+    $cell.Interior.Color = $couleurEnteteFond
+    $cell.HorizontalAlignment = -4108    # xlCenter
+    $cell.VerticalAlignment = -4107      # xlBottom
+
+    # Rotation sauf première colonne
+    if ($col -gt 0) {
+        $cell.Orientation = 90
+    }
+}
+
+# Hauteur ligne en-tête
+$ws.Rows.Item(1).RowHeight = 120
+
+# ---- DONNÉES ----
+for ($lig = 0; $lig -lt $matrice.Count; $lig++) {
+    $ligne = $matrice[$lig]
+    $excelLig = $lig + 2
+
+    for ($col = 0; $col -lt $colonnes.Count; $col++) {
+        $cell = $ws.Cells.Item($excelLig, $col + 1)
+        $valeur = $ligne.($colonnes[$col])
+        $cell.Value2 = $valeur
+
+        if ($valeur -eq "X") {
+            # Vert + texte blanc + gras + centré
+            $cell.Interior.Color = $couleurX
+            $cell.Font.Color = 0xFFFFFF
+            $cell.Font.Bold = $true
+            $cell.HorizontalAlignment = -4108
+        } else {
+            # Zébrage
+            if ($excelLig % 2 -eq 0) {
+                $cell.Interior.Color = $couleurLignesPaire
+            } else {
+                $cell.Interior.ColorIndex = 2   # Blanc
+            }
+        }
+    }
+}
+
+# ---- FIGER VOLETS ----
+$ws.Cells.Item(2, 2).Select()
+$excel.ActiveWindow.FreezePanes = $true
+
+# ---- AJUSTEMENT COLONNES ----
+$ws.Columns.AutoFit()
+
+# ---- SAUVEGARDE ----
+$fichier = "C:\matrice_droits.xlsx"
+$wb.SaveAs($fichier)
+$wb.Close()
+$excel.Quit()
+[System.Runtime.InteropServices.Marshal]::ReleaseComObject($excel) | Out-Null
+
+Write-Host "Export terminé : $fichier" -ForegroundColor Green
+```
+
+---
+
+**Ce qui a changé :**
+
+| Avant ❌ | Après ✅ |
+|---|---|
+| `[System.Drawing.ColorTranslator]::ToOle(...)` | `Get-ExcelColor R G B` |
+| `$cell.Font.Color = [Marshal]::GetA...` | `$cell.Font.Color = 0xFFFFFF` |
