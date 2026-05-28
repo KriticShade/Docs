@@ -1140,3 +1140,138 @@ Write-Host "Export terminé : $fichier" -ForegroundColor Green
 | Lignes paires | Gris moyen `210 210 210` |
 | Lignes impaires | Gris très clair `242 242 242` |
 | Marqueur `+` | Gris foncé avec texte blanc |
+
+
+
+
+```powershell
+function Get-ExcelColor($r, $g, $b) {
+    return $r + ($g * 256) + ($b * 65536)
+}
+
+# Panel de 5 couleurs FONCÉES qui se répètent
+$palette = @(
+    (Get-ExcelColor 31  78  121),  # Bleu foncé
+    (Get-ExcelColor 56  118  29),  # Vert foncé
+    (Get-ExcelColor 153 115   0),  # Jaune/Or foncé
+    (Get-ExcelColor 139  0    0),  # Rouge foncé
+    (Get-ExcelColor 102  0  153)   # Violet foncé
+)
+
+# Récupération des groupes
+$groupes = Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} | Sort-Object Name
+
+# Récupération des utilisateurs
+$utilisateurs = $groupes | ForEach-Object {
+    Get-ADGroupMember -Identity $_ -Recursive | Where-Object { $_.objectClass -eq "user" }
+} | Sort-Object SamAccountName | Select-Object -Unique -Property Name, SamAccountName
+
+# Construction de la matrice
+$matrice = foreach ($user in $utilisateurs) {
+    $userAD = Get-ADUser $user.SamAccountName -Properties MemberOf, DisplayName
+    $groupesUser = $userAD.MemberOf | ForEach-Object { (Get-ADGroup $_).Name }
+    $ligne = [ordered]@{ "Utilisateur" = $userAD.SamAccountName }
+    foreach ($groupe in $groupes) {
+        $ligne[$groupe.Name] = if ($groupesUser -contains $groupe.Name) { "+" } else { "" }
+    }
+    [PSCustomObject]$ligne
+}
+
+# ---- EXCEL VIA COM ----
+$excel = New-Object -ComObject Excel.Application
+$excel.Visible = $false
+$wb = $excel.Workbooks.Add()
+$ws = $wb.Worksheets.Item(1)
+$ws.Name = "Matrice Droits"
+
+$colonnes = $matrice[0].PSObject.Properties.Name
+
+# ---- EN-TÊTE ----
+for ($col = 0; $col -lt $colonnes.Count; $col++) {
+    $cell = $ws.Cells.Item(1, $col + 1)
+    $cell.Value2 = $colonnes[$col]
+    $cell.Font.Bold = $true
+    $cell.Font.Size = 7
+
+    if ($col -eq 0) {
+        $cell.Interior.Color = Get-ExcelColor 30 30 30
+        $cell.Font.Color = 0xFFFFFF
+        $cell.VerticalAlignment = -4107
+    } else {
+        $cell.Interior.Color = $palette[($col - 1) % 5]
+        $cell.Font.Color = 0xFFFFFF      # Texte blanc sur fond foncé
+        $cell.Orientation = 90
+        $cell.VerticalAlignment = -4107
+        $cell.HorizontalAlignment = -4108
+    }
+}
+
+# Hauteur ligne en-tête réduite au minimum viable avec rotation
+$ws.Rows.Item(1).RowHeight = 100
+
+# ---- DONNÉES ----
+for ($lig = 0; $lig -lt $matrice.Count; $lig++) {
+    $ligne = $matrice[$lig]
+    $excelLig = $lig + 2
+
+    for ($col = 0; $col -lt $colonnes.Count; $col++) {
+        $cell = $ws.Cells.Item($excelLig, $col + 1)
+        $valeur = $ligne.($colonnes[$col])
+        $cell.Value2 = $valeur
+        $cell.Font.Size = 7
+        $cell.Borders.LineStyle = 1
+        $cell.Borders.Weight = 1
+
+        if ($col -eq 0) {
+            if ($excelLig % 2 -eq 0) {
+                $cell.Interior.Color = Get-ExcelColor 200 200 200
+            } else {
+                $cell.Interior.Color = Get-ExcelColor 235 235 235
+            }
+        } elseif ($valeur -eq "+") {
+            $cell.Interior.Color = Get-ExcelColor 80 80 80
+            $cell.Font.Color = 0xFFFFFF
+            $cell.HorizontalAlignment = -4108
+            $cell.Font.Bold = $true
+        } else {
+            if ($excelLig % 2 -eq 0) {
+                $cell.Interior.Color = Get-ExcelColor 200 200 200
+            } else {
+                $cell.Interior.Color = Get-ExcelColor 235 235 235
+            }
+        }
+    }
+
+    # Hauteur de ligne minimale
+    $ws.Rows.Item($excelLig).RowHeight = 11
+}
+
+# ---- FIGER VOLETS ----
+$ws.Cells.Item(2, 2).Select()
+$excel.ActiveWindow.FreezePanes = $true
+
+# ---- LARGEUR COLONNES ----
+$ws.Columns.Item(1).ColumnWidth = 15  # Colonne utilisateur
+for ($col = 2; $col -le $colonnes.Count; $col++) {
+    $ws.Columns.Item($col).ColumnWidth = 2.5  # Minimum lisible
+}
+
+# ---- SAUVEGARDE ----
+$fichier = "C:\matrice_droits.xlsx"
+$wb.SaveAs($fichier)
+$wb.Close()
+$excel.Quit()
+[System.Runtime.InteropServices.Marshal]::ReleaseComObject($excel) | Out-Null
+
+Write-Host "Export terminé : $fichier" -ForegroundColor Green
+```
+
+**Modifications :**
+
+| Élément | Valeur |
+|---|---|
+| Hauteur lignes données | `11` (minimum Excel) |
+| Largeur colonnes groupes | `2.5` (minimum lisible) |
+| Hauteur en-tête | `100` (réduit vs 130) |
+| Couleurs en-tête | Foncées + **texte blanc** |
+| Police | Taille `7` partout |
