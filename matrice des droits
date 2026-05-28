@@ -367,3 +367,24 @@ Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} | ForEach-Object {
 > - Chercher **tous les groupes** `GG_F_CDAD-BDX*`
 > - Lister **tous les utilisateurs** de chaque groupe
 > - Exporter dans **`C:\export.csv`** ouvrable directement dans Excel
+
+
+
+
+
+
+```powershell
+Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} | 
+Select-Object Name | 
+Export-Csv "C:\export.csv" -NoTypeInformation -Delimiter ";" -Encoding UTF8
+```
+
+> ✅ Exporte uniquement les **noms des groupes** + affiche le **nombre total** à la fin
+
+Si vous voulez aussi voir le total dans le CSV :
+
+```powershell
+$groupes = Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} | Select-Object Name
+Write-Host "Nombre total de groupes : $($groupes.Count)" -ForegroundColor Green
+$groupes | Export-Csv "C:\export.csv" -NoTypeInformation -Delimiter ";" -Encoding UTF8
+```
