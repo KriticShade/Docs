@@ -469,3 +469,122 @@ Write-Host "Export terminé : C:\matrice.csv" -ForegroundColor Green
 
 
 
+
+
+
+
+
+
+
+
+
+Oui c'est possible avec le module **ImportExcel** !
+
+**Installation :**
+```powershell
+Install-Module ImportExcel -Scope CurrentUser
+```
+
+```powershell
+Import-Module ImportExcel
+
+# Récupération des groupes
+$groupes = Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} | Sort-Object Name
+
+# Récupération des utilisateurs
+$utilisateurs = $groupes | ForEach-Object {
+    Get-ADGroupMember -Identity $_ -Recursive | Where-Object { $_.objectClass -eq "user" }
+} | Sort-Object Name | Select-Object -Unique -Property Name, SamAccountName, distinguishedName
+
+# Construction de la matrice
+$matrice = foreach ($user in $utilisateurs) {
+    $userAD = Get-ADUser $user.SamAccountName -Properties MemberOf, DisplayName
+    $groupesUser = $userAD.MemberOf | ForEach-Object { (Get-ADGroup $_).Name }
+    
+    $ligne = [ordered]@{ "Utilisateur" = $userAD.DisplayName }
+    
+    foreach ($groupe in $groupes) {
+        $ligne[$groupe.Name] = if ($groupesUser -contains $groupe.Name) { "X" } else { "" }
+    }
+    [PSCustomObject]$ligne
+}
+
+$fichier = "C:\matrice_droits.xlsx"
+$matrice | Export-Excel -Path $fichier -WorksheetName "Matrice" -AutoSize -PassThru | ForEach-Object {
+    $ws = $_.Workbook.Worksheets["Matrice"]
+    
+    # Nombre de colonnes et lignes
+    $nbCol = $ws.Dimension.Columns
+    $nbLig = $ws.Dimension.Rows
+
+    # ---- LIGNE D'EN-TÊTE ----
+    for ($col = 1; $col -le $nbCol; $col++) {
+        $cell = $ws.Cells[1, $col]
+        
+        # Couleur fond bleu foncé + texte blanc
+        $cell.Style.Fill.PatternType = [OfficeOpenXml.Style.ExcelFillStyle]::Solid
+        $cell.Style.Fill.BackgroundColor.SetColor([System.Drawing.Color]::FromArgb(31, 73, 125))
+        $cell.Style.Font.Color.SetColor([System.Drawing.Color]::White)
+        $cell.Style.Font.Bold = $true
+        
+        # Rotation du texte vers le haut (sauf colonne Utilisateur)
+        if ($col -gt 1) {
+            $cell.Style.TextRotation = 90
+        }
+        
+        # Alignement centré
+        $cell.Style.HorizontalAlignment = [OfficeOpenXml.Style.ExcelHorizontalAlignment]::Center
+        $cell.Style.VerticalAlignment = [OfficeOpenXml.Style.ExcelVerticalAlignment]::Bottom
+    }
+
+    # ---- LIGNES DE DONNÉES ----
+    for ($lig = 2; $lig -le $nbLig; $lig++) {
+        
+        # Alternance de couleurs (zébrage)
+        $couleurFond = if ($lig % 2 -eq 0) {
+            [System.Drawing.Color]::FromArgb(220, 230, 241)  # Bleu clair
+        } else {
+            [System.Drawing.Color]::White
+        }
+        
+        for ($col = 1; $col -le $nbCol; $col++) {
+            $cell = $ws.Cells[$lig, $col]
+            
+            # Fond zébré
+            $cell.Style.Fill.PatternType = [OfficeOpenXml.Style.ExcelFillStyle]::Solid
+            $cell.Style.Fill.BackgroundColor.SetColor($couleurFond)
+            
+            # Si la cellule contient X → vert + gras
+            if ($cell.Value -eq "X") {
+                $cell.Style.Fill.BackgroundColor.SetColor([System.Drawing.Color]::FromArgb(0, 176, 80))
+                $cell.Style.Font.Color.SetColor([System.Drawing.Color]::White)
+                $cell.Style.Font.Bold = $true
+                $cell.Style.HorizontalAlignment = [OfficeOpenXml.Style.ExcelHorizontalAlignment]::Center
+            }
+        }
+    }
+
+    # ---- FIGER LA PREMIÈRE LIGNE ET COLONNE ----
+    $ws.View.FreezePanes(2, 2)
+
+    # ---- HAUTEUR DE LA LIGNE D'EN-TÊTE ----
+    $ws.Row(1).Height = 120
+
+    # Sauvegarde
+    $_.Save()
+}
+
+Write-Host "Export terminé : $fichier" -ForegroundColor Green
+```
+
+**Résultat :**
+| Fonctionnalité | Détail |
+|---|---|
+| 🔵 En-tête | Fond bleu foncé, texte blanc, gras |
+| 🔄 Rotation | Texte des groupes à 90° |
+| 🟢 Croix X | Fond vert, texte blanc, gras |
+| zebré | Lignes alternées blanc/bleu clair |
+| 📌 Figé | Ligne 1 et colonne 1 figées au scroll |
+
+
+
