@@ -429,3 +429,16 @@ Write-Host "Export terminé : C:\matrice.csv" -ForegroundColor Green
 > - **Colonne gauche** → nom des utilisateurs
 > - **Colonnes du haut** → chaque groupe `GG_F_CDAD-BDX*`
 > - **X** → là où l'utilisateur est membre du groupe
+
+
+
+
+
+
+
+
+
+
+
+
+
