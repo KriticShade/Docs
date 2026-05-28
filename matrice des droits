@@ -1,0 +1,205 @@
+# Matrice des droits AD - Approche PowerShell + Excel
+
+## Stratégie globale
+
+```
+AD (Users/Groups) → PowerShell → CSV/Excel → Matrice croisée
+```
+
+---
+
+## Script PowerShell complet
+
+```powershell
+# ============================================
+# Prérequis : Module ActiveDirectory
+# Install-WindowsFeature RSAT-AD-PowerShell
+# ============================================
+
+Import-Module ActiveDirectory
+
+# ---- PARAMÈTRES À ADAPTER ----
+$OUBase        = "OU=Equipes,DC=mondomaine,DC=local"
+$OutputPath    = "C:\Export\MatriceDroits_$(Get-Date -Format 'yyyyMMdd').xlsx"
+$CSVPath       = "C:\Export\MatriceDroits_$(Get-Date -Format 'yyyyMMdd').csv"
+
+# ==============================
+# 1. COLLECTE DES DONNÉES
+# ==============================
+
+Write-Host "[1/4] Récupération des groupes..." -ForegroundColor Cyan
+
+$Groupes = Get-ADGroup -Filter * -SearchBase $OUBase -Properties Description, Members |
+    Sort-Object Name
+
+Write-Host "[2/4] Récupération des utilisateurs et leurs groupes..." -ForegroundColor Cyan
+
+$Utilisateurs = Get-ADUser -Filter * -SearchBase $OUBase -Properties DisplayName, 
+    SamAccountName, MemberOf, EmailAddress, Department, Title |
+    Sort-Object DisplayName
+
+# ==============================
+# 2. CONSTRUCTION DE LA MATRICE
+# ==============================
+
+Write-Host "[3/4] Construction de la matrice..." -ForegroundColor Cyan
+
+# Récupère les noms des groupes pour les colonnes
+$NomGroupes = $Groupes | Select-Object -ExpandProperty Name
+
+$Matrice = foreach ($User in $Utilisateurs) {
+    
+    # Groupes de l'utilisateur (noms seulement)
+    $GroupesUser = $User.MemberOf | ForEach-Object {
+        (Get-ADGroup $_).Name
+    }
+    
+    # Objet de base
+    $Ligne = [ordered]@{
+        "DisplayName"    = $User.DisplayName
+        "Login"          = $User.SamAccountName
+        "Email"          = $User.EmailAddress
+        "Département"    = $User.Department
+        "Titre"          = $User.Title
+    }
+    
+    # Colonne par groupe : X si membre, vide sinon
+    foreach ($Groupe in $NomGroupes) {
+        $Ligne[$Groupe] = if ($GroupesUser -contains $Groupe) { "X" } else { "" }
+    }
+    
+    [PSCustomObject]$Ligne
+}
+
+# ==============================
+# 3. EXPORT CSV (toujours utile)
+# ==============================
+
+$Matrice | Export-Csv -Path $CSVPath -NoTypeInformation -Encoding UTF8 -Delimiter ";"
+Write-Host "    CSV exporté : $CSVPath" -ForegroundColor Green
+
+# ==============================
+# 4. EXPORT EXCEL (avec mise en forme)
+# ==============================
+
+Write-Host "[4/4] Génération du fichier Excel..." -ForegroundColor Cyan
+
+# Nécessite le module ImportExcel
+# Install-Module ImportExcel -Scope CurrentUser
+
+if (Get-Module -ListAvailable -Name ImportExcel) {
+    
+    $ExcelParams = @{
+        Path            = $OutputPath
+        WorksheetName   = "Matrice Utilisateurs-Groupes"
+        AutoSize        = $true
+        AutoFilter      = $true
+        FreezeTopRow    = $true
+        BoldTopRow      = $true
+        TableName       = "MatriceDroits"
+        TableStyle      = "Medium6"
+        PassThru        = $true
+    }
+    
+    $Excel = $Matrice | Export-Excel @ExcelParams
+    
+    # --- Mise en forme conditionnelle ---
+    $Ws = $Excel.Workbook.Worksheets["Matrice Utilisateurs-Groupes"]
+    
+    # Colorier les "X" en vert
+    $NbColonnes = $Matrice[0].PSObject.Properties.Name.Count
+    $NbLignes   = $Matrice.Count + 1  # +1 pour l'entête
+    $ColDebut   = 6  # Après les 5 colonnes d'info
+    
+    for ($Col = $ColDebut; $Col -le $NbColonnes; $Col++) {
+        for ($Row = 2; $Row -le $NbLignes; $Row++) {
+            $Cell = $Ws.Cells[$Row, $Col]
+            if ($Cell.Value -eq "X") {
+                $Cell.Style.Fill.PatternType = [OfficeOpenXml.Style.ExcelFillStyle]::Solid
+                $Cell.Style.Fill.BackgroundColor.SetColor([System.Drawing.Color]::LightGreen)
+                $Cell.Style.Font.Bold = $true
+                $Cell.Style.HorizontalAlignment = "Center"
+            }
+        }
+    }
+    
+    # Rotation des entêtes de groupes (lisibilité)
+    for ($Col = $ColDebut; $Col -le $NbColonnes; $Col++) {
+        $Ws.Cells[1, $Col].Style.TextRotation = 45
+    }
+    
+    Close-ExcelPackage $Excel
+    Write-Host "    Excel exporté : $OutputPath" -ForegroundColor Green
+
+} else {
+    Write-Warning "Module ImportExcel non trouvé. Seul le CSV a été généré."
+    Write-Host "    Installez-le via : Install-Module ImportExcel -Scope CurrentUser" -ForegroundColor Yellow
+}
+
+Write-Host "`n✅ Export terminé !" -ForegroundColor Green
+```
+
+---
+
+## Bonus : Onglet inversé (Groupes → Membres)
+
+```powershell
+# Ajouter un 2ème onglet : vue par groupe
+
+$VueGroupes = foreach ($Groupe in $Groupes) {
+    
+    $Membres = Get-ADGroupMember -Identity $Groupe -Recursive | 
+        Where-Object { $_.objectClass -eq "user" } |
+        ForEach-Object { $_.SamAccountName }
+    
+    [PSCustomObject]@{
+        "Groupe"       = $Groupe.Name
+        "Description"  = $Groupe.Description
+        "NbMembres"    = $Membres.Count
+        "Membres"      = ($Membres -join ", ")
+    }
+}
+
+# Ajout dans le même fichier Excel
+$VueGroupes | Export-Excel -Path $OutputPath `
+    -WorksheetName "Vue par Groupe" `
+    -AutoSize -AutoFilter -BoldTopRow `
+    -TableName "VueGroupes" -TableStyle "Medium4"
+```
+
+---
+
+## Résultat attendu
+
+```
+Excel avec 2 onglets :
+
+[Matrice Utilisateurs-Groupes]
+┌─────────────────┬────────┬──────┬──────────┬──────────────┬────────────┐
+│ DisplayName     │ Login  │ Dept │ GRP_RH   │ GRP_FINANCE  │ GRP_ADMIN  │
+├─────────────────┼────────┼──────┼──────────┼──────────────┼────────────┤
+│ Alice Martin    │ amartin│ RH   │    X     │              │            │
+│ Bob Dupont      │ bdupont│ FIN  │          │      X       │            │
+│ Claire Durand   │ cdurand│ IT   │          │              │     X      │
+└─────────────────┴────────┴──────┴──────────┴──────────────┴────────────┘
+
+[Vue par Groupe]
+┌──────────────┬─────────────────────┬───────────┬─────────────────────┐
+│ Groupe       │ Description         │ NbMembres │ Membres             │
+├──────────────┼─────────────────────┼───────────┼─────────────────────┤
+│ GRP_RH       │ Équipe RH           │ 5         │ amartin, jleblanc...│
+└──────────────┴─────────────────────┴───────────┴─────────────────────┘
+```
+
+---
+
+## Points clés
+
+| Élément | Détail |
+|---|---|
+| **Module requis** | `ImportExcel` (gratuit, pas besoin d'Excel installé sur le serveur) |
+| **Droits AD** | Lecture seule suffit |
+| **Perf** | Préférer `-Recursive` avec précaution sur grands domaines |
+| **Filtrage** | Adapter `$OUBase` ou ajouter `-Filter {Department -eq "IT"}` |
+
+> 💡 **Tip** : Sur un grand AD, remplacez les appels `Get-ADGroup` dans la boucle par un **hashtable préconstruit** pour éviter des milliers de requêtes AD.
