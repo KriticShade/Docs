@@ -436,7 +436,34 @@ Write-Host "Export terminé : C:\matrice.csv" -ForegroundColor Green
 
 
 
+```powershell
+# Récupération des groupes
+$groupes = Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} | Sort-Object Name
 
+# Récupération uniquement des utilisateurs membres d'au moins un de ces groupes
+$utilisateurs = $groupes | ForEach-Object {
+    Get-ADGroupMember -Identity $_ -Recursive | Where-Object { $_.objectClass -eq "user" }
+} | Sort-Object Name | Select-Object -Unique -Property Name, SamAccountName, distinguishedName
+
+# Construction de la matrice
+$matrice = foreach ($user in $utilisateurs) {
+    $userAD = Get-ADUser $user.SamAccountName -Properties MemberOf, DisplayName
+    $groupesUser = $userAD.MemberOf | ForEach-Object { (Get-ADGroup $_).Name }
+    
+    $ligne = [ordered]@{ "Utilisateur" = $userAD.DisplayName }
+    
+    foreach ($groupe in $groupes) {
+        $ligne[$groupe.Name] = if ($groupesUser -contains $groupe.Name) { "X" } else { "" }
+    }
+    [PSCustomObject]$ligne
+}
+
+# Export
+$matrice | Export-Csv "C:\matrice.csv" -NoTypeInformation -Delimiter ";" -Encoding UTF8
+Write-Host "Export terminé : C:\matrice.csv" -ForegroundColor Green
+```
+
+> ✅ Seuls les utilisateurs **membres d'au moins un groupe** `GG_F_CDAD-BDX*` apparaîtront dans la matrice
 
 
 
