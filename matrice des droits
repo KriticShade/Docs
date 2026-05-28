@@ -202,4 +202,93 @@ Excel avec 2 onglets :
 | **Perf** | Préférer `-Recursive` avec précaution sur grands domaines |
 | **Filtrage** | Adapter `$OUBase` ou ajouter `-Filter {Department -eq "IT"}` |
 
-> 💡 **Tip** : Sur un grand AD, remplacez les appels `Get-ADGroup` dans la boucle par un **hashtable préconstruit** pour éviter des milliers de requêtes AD.
+> 💡 **Tip** : Sur un grand AD, remplacez les appels `Get-ADGroup` dans la boucle par un **hashtable préconstruit** pour éviter des milliers de requêtes AD
+
+
+
+# Filtrage des groupes par préfixe
+
+## Modification simple du filtre
+
+```powershell
+# Remplacer la ligne Get-ADGroup par :
+
+$Groupes = Get-ADGroup -Filter { Name -like "GG_F_CDAD-BDX*" } `
+    -Properties Description, Members |
+    Sort-Object Name
+```
+
+---
+
+## Script adapté complet
+
+```powershell
+Import-Module ActiveDirectory
+
+# ---- PARAMÈTRES ----
+$Prefixe       = "GG_F_CDAD-BDX*"
+$OUBase        = "DC=mondomaine,DC=local"   # Adapter
+$OutputPath    = "C:\Export\MatriceDroits_$(Get-Date -Format 'yyyyMMdd').xlsx"
+
+# ==============================
+# 1. COLLECTE
+# ==============================
+
+Write-Host "[1/4] Récupération des groupes GG_F_CDAD-BDX..." -ForegroundColor Cyan
+
+$Groupes = Get-ADGroup -Filter { Name -like "GG_F_CDAD-BDX*" } `
+    -Properties Description, Members |
+    Sort-Object Name
+
+Write-Host "    → $($Groupes.Count) groupes trouvés" -ForegroundColor Green
+
+# Affichage rapide des groupes trouvés (contrôle visuel)
+$Groupes | Select-Object Name, Description | Format-Table -AutoSize
+```
+
+---
+
+## Tip : Nommage des colonnes raccourci
+
+Les noms de groupes étant longs, vous pouvez **tronquer le préfixe commun** dans les entêtes Excel pour gagner de la place :
+
+```powershell
+# Au lieu du nom complet "GG_F_CDAD-BDX_RH_Lecture"
+# La colonne affichera juste "_RH_Lecture"
+
+$NomGroupes = $Groupes | ForEach-Object {
+    $_.Name -replace "^GG_F_CDAD-BDX", ""
+}
+
+# Mais on garde le nom complet dans un hashtable pour la logique
+$MapGroupes = @{}
+for ($i = 0; $i -lt $Groupes.Count; $i++) {
+    $MapGroupes[$NomGroupes[$i]] = $Groupes[$i].Name
+}
+
+# Dans la boucle utilisateurs :
+foreach ($NomCourt in $NomGroupes) {
+    $NomComplet = $MapGroupes[$NomCourt]
+    $Ligne[$NomCourt] = if ($GroupesUser -contains $NomComplet) { "X" } else { "" }
+}
+```
+
+---
+
+## Résultat dans Excel
+
+```
+Avant :
+┌──────────────────────────────┬──────────────────────────────┐
+│ GG_F_CDAD-BDX_RH_Lecture    │ GG_F_CDAD-BDX_Finance_Admin  │
+
+Après (colonne raccourcie) :
+┌──────────────┬───────────────┐
+│ _RH_Lecture  │ _Finance_Admin│
+```
+
+> 💡 **Tip** : Avec la rotation à 45° des entêtes vue précédemment, même les noms longs restent lisibles sans trop élargir les colonnes.
+
+---
+
+Pouvez-vous me donner un exemple de nom complet de groupe ? (ex: `GG_F_CDAD-BDX_RH_Lecture`) pour qu'on adapte **le découpage intelligent** des colonnes selon votre convention de nommage ?
