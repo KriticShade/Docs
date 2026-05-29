@@ -575,3 +575,325 @@ Write-Host "  A ajouter   : $($aAjouter.Count) en bleu"               -Foregroun
   ⚠ COMPTES A AJOUTER
   userY    | 🔵  | 🔵  | 🔵  | 🔵  | 🔵  |   ← bleu (vide, pas dans AD)
 ```
+
+
+
+
+
+
+
+
+
+
+Deux problèmes à corriger :
+
+1. **Format SamAccountName** → `p.nom` au lieu de `pnom`
+2. **Chiffres dans l'AD** → `jdupont2` dans l'AD doit matcher `jdupont` des actifs (on compare sans le chiffre final)
+
+---
+
+```powershell
+function Get-ExcelColor($r, $g, $b) {
+    return $r + ($g * 256) + ($b * 65536)
+}
+
+$palette = @(
+    (Get-ExcelColor 183 222 232),
+    (Get-ExcelColor 216 228 188),
+    (Get-ExcelColor 252 213 180),
+    (Get-ExcelColor 230 184 183),
+    (Get-ExcelColor 204 192 218)
+)
+
+# ============================================================
+# LECTURE DU FICHIER EXCEL DES ACTIFS
+# Colonne A = Nom, Colonne B = Prénom
+# ============================================================
+$fichierActifs = "C:\Users\x\Downloads\actifs.xlsx"
+
+$excelLecture = New-Object -ComObject Excel.Application
+$excelLecture.Visible = $false
+$wbActifs = $excelLecture.Workbooks.Open($fichierActifs)
+$wsActifs = $wbActifs.Worksheets.Item(1)
+
+$ligneMax = $wsActifs.UsedRange.Rows.Count
+$listeActifs = @()
+
+function Normalize-String($s) {
+    $s = $s.ToLower().Trim()
+    $s = $s -replace '[éèêë]','e' -replace '[àâä]','a' -replace '[ùûü]','u' `
+            -replace '[îï]','i'   -replace '[ôö]','o'  -replace '[ç]','c' `
+            -replace '[^a-z0-9.]',''
+    return $s
+}
+
+for ($i = 2; $i -le $ligneMax; $i++) {
+    $nom    = $wsActifs.Cells.Item($i, 1).Value2
+    $prenom = $wsActifs.Cells.Item($i, 2).Value2
+
+    if ($nom -and $prenom) {
+        # Format : première lettre prénom + "." + nom
+        $sam = (Normalize-String($prenom.Substring(0,1))) + "." + (Normalize-String($nom))
+        $listeActifs += $sam
+    }
+}
+
+$wbActifs.Close($false)
+$excelLecture.Quit()
+[System.Runtime.InteropServices.Marshal]::ReleaseComObject($excelLecture) | Out-Null
+Write-Host "Actifs chargés : $($listeActifs.Count)" -ForegroundColor Cyan
+
+# ============================================================
+# RÉCUPÉRATION AD
+# ============================================================
+$groupes = Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} | Sort-Object Name
+
+$utilisateurs = $groupes | ForEach-Object {
+    Get-ADGroupMember -Identity $_ -Recursive | Where-Object { $_.objectClass -eq "user" }
+} | Sort-Object SamAccountName | Select-Object -Unique -Property Name, SamAccountName
+
+# ============================================================
+# FONCTION DE NORMALISATION POUR COMPARAISON
+# Supprime les chiffres en fin de SamAccountName
+# Ex: j.dupont2 => j.dupont
+# ============================================================
+function Strip-Number($sam) {
+    return ($sam -replace '\d+$','').ToLower().Trim()
+}
+
+# ============================================================
+# CROISEMENT
+# ============================================================
+# Pour chaque user AD, on compare sans le chiffre final
+$utilisateursActifs  = $utilisateurs | Where-Object {
+    $listeActifs -contains (Strip-Number $_.SamAccountName)
+}
+$utilisateursSuppr   = $utilisateurs | Where-Object {
+    $listeActifs -notcontains (Strip-Number $_.SamAccountName)
+}
+
+# Ceux dans actifs mais aucun compte AD correspondant
+$samsADNormalises = $utilisateurs | ForEach-Object { Strip-Number $_.SamAccountName }
+$aAjouter = $listeActifs | Where-Object { $samsADNormalises -notcontains $_ }
+
+Write-Host "Actifs trouvés dans AD : $($utilisateursActifs.Count)" -ForegroundColor Green
+Write-Host "A supprimer            : $($utilisateursSuppr.Count)"  -ForegroundColor Red
+Write-Host "A ajouter              : $($aAjouter.Count)"           -ForegroundColor Blue
+
+# ============================================================
+# PRÉ-CALCUL MEMBRES PAR GROUPE (performance)
+# ============================================================
+$membresParGroupe = @{}
+foreach ($groupe in $groupes) {
+    try {
+        $membresParGroupe[$groupe.Name] = Get-ADGroupMember -Identity $groupe -Recursive |
+            Where-Object { $_.objectClass -eq "user" } |
+            ForEach-Object { $_.SamAccountName.ToLower() }
+    } catch {
+        $membresParGroupe[$groupe.Name] = @()
+    }
+}
+
+# ============================================================
+# EXPORT EXCEL
+# ============================================================
+$excel = New-Object -ComObject Excel.Application
+$excel.Visible = $false
+$wb = $excel.Workbooks.Add()
+$ws = $wb.Worksheets.Item(1)
+$ws.Name = "Matrice Droits"
+
+$nbGroupes = $groupes.Count
+
+# --- EN-TÊTE LIGNE 1 ---
+$ws.Cells.Item(1,1).Value2 = "Utilisateur"
+$ws.Cells.Item(1,1).Font.Bold = $true
+$ws.Cells.Item(1,1).Font.Size = 10
+$ws.Cells.Item(1,1).Font.Color = 0xFFFFFF
+$ws.Cells.Item(1,1).Interior.Color = 0x000000
+$ws.Rows.Item(1).RowHeight = 80
+
+$colIndex = 2
+$colorIndex = 0
+foreach ($groupe in $groupes) {
+    $cell = $ws.Cells.Item(1, $colIndex)
+    $cell.Value2 = $groupe.Name
+    $cell.Font.Bold = $true
+    $cell.Font.Size = 10
+    $cell.Font.Color = 0xFFFFFF
+    $cell.Interior.Color = 0x000000
+    $cell.Orientation = 90
+    $cell.HorizontalAlignment = -4108
+    $cell.VerticalAlignment = -4107
+    $ws.Columns.Item($colIndex).ColumnWidth = 4
+    foreach ($edge in @(7,8,9,10)) {
+        $cell.Borders.Item($edge).LineStyle = 1
+        $cell.Borders.Item($edge).Weight = 2
+        $cell.Borders.Item($edge).Color = 0x000000
+    }
+    $colIndex++
+    $colorIndex++
+}
+
+# ============================================================
+# FONCTION ÉCRITURE LIGNE UTILISATEUR
+# ============================================================
+function Write-UserRow {
+    param($ws, $row, $sam, $groupes, $membresParGroupe, $couleurFond, $couleurX, $palette)
+
+    $cell0 = $ws.Cells.Item($row, 1)
+    $cell0.Value2 = $sam
+    $cell0.Interior.Color = $couleurFond
+    $cell0.Font.Size = 10
+    $cell0.Font.Color = 0x000000
+    $cell0.Font.Bold = $false
+    $ws.Rows.Item($row).RowHeight = 14
+
+    foreach ($edge in @(7,8,9,10)) {
+        $cell0.Borders.Item($edge).LineStyle = 1
+        $cell0.Borders.Item($edge).Weight = 2
+        $cell0.Borders.Item($edge).Color = 0x000000
+    }
+
+    $colIdx = 2
+    $cIdx   = 0
+    foreach ($groupe in $groupes) {
+        $estMembre = $membresParGroupe[$groupe.Name] -contains $sam.ToLower()
+        $cell = $ws.Cells.Item($row, $colIdx)
+        if ($estMembre) {
+            $cell.Value2 = "+"
+            $cell.Font.Bold = $true
+            $cell.Font.Size = 10
+            $cell.Interior.Color = $couleurX
+        } else {
+            $cell.Interior.Color = $palette[$cIdx % $palette.Count]
+        }
+        foreach ($edge in @(7,8,9,10)) {
+            $cell.Borders.Item($edge).LineStyle = 1
+            $cell.Borders.Item($edge).Weight = 2
+            $cell.Borders.Item($edge).Color = 0x000000
+        }
+        $colIdx++
+        $cIdx++
+    }
+}
+
+# ============================================================
+# FONCTION TITRE SÉPARATEUR
+# ============================================================
+function Write-SeparatorRow {
+    param($ws, $row, $texte, $couleurFond, $couleurTexte, $nbGroupes)
+
+    $ws.Cells.Item($row, 1).Value2 = $texte
+    $ws.Cells.Item($row, 1).Font.Bold = $true
+    $ws.Cells.Item($row, 1).Font.Size = 10
+    $ws.Cells.Item($row, 1).Font.Color = $couleurTexte
+    $ws.Cells.Item($row, 1).Interior.Color = $couleurFond
+    $ws.Rows.Item($row).RowHeight = 16
+
+    for ($c = 1; $c -le ($nbGroupes + 1); $c++) {
+        $ws.Cells.Item($row, $c).Interior.Color = $couleurFond
+    }
+}
+
+# ============================================================
+# BLOC 1 - UTILISATEURS ACTIFS
+# ============================================================
+$rowCurrent = 2
+
+foreach ($user in ($utilisateursActifs | Sort-Object SamAccountName)) {
+    Write-UserRow -ws $ws -row $rowCurrent -sam $user.SamAccountName `
+                  -groupes $groupes -membresParGroupe $membresParGroupe `
+                  -couleurFond (Get-ExcelColor 242 242 242) `
+                  -couleurX    (Get-ExcelColor 0 176 80) `
+                  -palette $palette
+    $rowCurrent++
+}
+
+# ============================================================
+# BLOC 2 - A SUPPRIMER (rose)
+# ============================================================
+$rowCurrent++
+Write-SeparatorRow -ws $ws -row $rowCurrent `
+    -texte "⚠ A SUPPRIMER — dans l'AD mais absents des actifs" `
+    -couleurFond   (Get-ExcelColor 255 150 150) `
+    -couleurTexte  (Get-ExcelColor 120 0 0) `
+    -nbGroupes $nbGroupes
+$rowCurrent++
+
+foreach ($user in ($utilisateursSuppr | Sort-Object SamAccountName)) {
+    Write-UserRow -ws $ws -row $rowCurrent -sam $user.SamAccountName `
+                  -groupes $groupes -membresParGroupe $membresParGroupe `
+                  -couleurFond (Get-ExcelColor 255 199 206) `
+                  -couleurX    (Get-ExcelColor 255 80 80) `
+                  -palette $palette
+    $rowCurrent++
+}
+
+# ============================================================
+# BLOC 3 - A AJOUTER (bleu)
+# ============================================================
+$rowCurrent++
+Write-SeparatorRow -ws $ws -row $rowCurrent `
+    -texte "⚠ A AJOUTER — dans les actifs mais absents de l'AD" `
+    -couleurFond  (Get-ExcelColor 100 150 255) `
+    -couleurTexte (Get-ExcelColor 0 40 120) `
+    -nbGroupes $nbGroupes
+$rowCurrent++
+
+foreach ($sam in ($aAjouter | Sort-Object)) {
+    $ws.Cells.Item($rowCurrent, 1).Value2 = $sam
+    $ws.Cells.Item($rowCurrent, 1).Interior.Color = Get-ExcelColor 189 215 238
+    $ws.Cells.Item($rowCurrent, 1).Font.Size = 10
+    $ws.Cells.Item($rowCurrent, 1).Font.Color = 0x000000
+    $ws.Rows.Item($rowCurrent).RowHeight = 14
+    foreach ($edge in @(7,8,9,10)) {
+        $ws.Cells.Item($rowCurrent,1).Borders.Item($edge).LineStyle = 1
+        $ws.Cells.Item($rowCurrent,1).Borders.Item($edge).Weight = 2
+        $ws.Cells.Item($rowCurrent,1).Borders.Item($edge).Color = 0x000000
+    }
+    for ($c = 2; $c -le ($nbGroupes + 1); $c++) {
+        $ws.Cells.Item($rowCurrent, $c).Interior.Color = Get-ExcelColor 210 228 245
+        foreach ($edge in @(7,8,9,10)) {
+            $ws.Cells.Item($rowCurrent,$c).Borders.Item($edge).LineStyle = 1
+            $ws.Cells.Item($rowCurrent,$c).Borders.Item($edge).Weight = 2
+            $ws.Cells.Item($rowCurrent,$c).Borders.Item($edge).Color = 0x000000
+        }
+    }
+    $rowCurrent++
+}
+
+# ============================================================
+# FINITIONS
+# ============================================================
+$ws.Columns.Item(1).ColumnWidth = 25
+$ws.Application.ActiveWindow.SplitRow    = 1
+$ws.Application.ActiveWindow.SplitColumn = 1
+$ws.Application.ActiveWindow.FreezePanes = $true
+
+# ============================================================
+# SAUVEGARDE
+# ============================================================
+$fichier = "C:\Users\x\Downloads\matrice_droits.xlsx"
+$wb.SaveAs($fichier)
+$wb.Close()
+$excel.Quit()
+[System.Runtime.InteropServices.Marshal]::ReleaseComObject($excel) | Out-Null
+
+Write-Host ""
+Write-Host "Export terminé : $fichier" -ForegroundColor Green
+Write-Host "  Actifs      : $($utilisateursActifs.Count) utilisateurs" -ForegroundColor White
+Write-Host "  A supprimer : $($utilisateursSuppr.Count)"               -ForegroundColor Red
+Write-Host "  A ajouter   : $($aAjouter.Count)"                        -ForegroundColor Blue
+```
+
+---
+
+**Points clés des corrections :**
+
+| Problème | Solution |
+|---|---|
+| Format sam | `j.dupont` avec le point |
+| Chiffres AD | `Strip-Number` retire les chiffres finaux avant comparaison |
+| Taille police | 10 partout, noir pour les données |
+| En-tête | Fond **noir**, texte **blanc** |
