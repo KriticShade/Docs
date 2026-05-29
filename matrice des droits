@@ -308,3 +308,270 @@ Les formats les plus courants :
 | `nom + 1ère lettre prénom` | `dupontj` | `$nom + $prenom.Substring(0,1)` |
 
 **Dis-moi quel format utilise ton AD** et j'adapterai la ligne `$sam = ...` en conséquence.
+
+
+
+
+
+
+Donc tout sur **un seul onglet** :
+
+1. ✅ **Tableau principal** → utilisateurs présents dans les actifs (couleurs normales)
+2. 🔴 **En bas en rose** → dans AD mais absents des actifs (à supprimer)
+3. 🔵 **En bas en bleu** → dans les actifs mais absents de l'AD (à ajouter)
+
+---
+
+```powershell
+function Get-ExcelColor($r, $g, $b) {
+    return $r + ($g * 256) + ($b * 65536)
+}
+
+$palette = @(
+    (Get-ExcelColor 183 222 232),
+    (Get-ExcelColor 216 228 188),
+    (Get-ExcelColor 252 213 180),
+    (Get-ExcelColor 230 184 183),
+    (Get-ExcelColor 204 192 218)
+)
+
+# ============================================================
+# LECTURE DU FICHIER EXCEL DES ACTIFS
+# ============================================================
+$fichierActifs = "C:\Users\x\Downloads\actifs.xlsx"
+
+$excelLecture = New-Object -ComObject Excel.Application
+$excelLecture.Visible = $false
+$wbActifs = $excelLecture.Workbooks.Open($fichierActifs)
+$wsActifs = $wbActifs.Worksheets.Item(1)
+
+$ligneMax = $wsActifs.UsedRange.Rows.Count
+$listeActifs = @()
+
+for ($i = 2; $i -le $ligneMax; $i++) {
+    $nom    = $wsActifs.Cells.Item($i, 1).Value2
+    $prenom = $wsActifs.Cells.Item($i, 2).Value2
+
+    if ($nom -and $prenom) {
+        $sam = ($prenom.Substring(0,1) + $nom).ToLower().Trim()
+        $sam = $sam -replace '[éèêë]','e' -replace '[àâä]','a' -replace '[ùûü]','u' `
+                    -replace '[îï]','i'   -replace '[ôö]','o'  -replace '[ç]','c' `
+                    -replace '[^a-z0-9]',''
+        $listeActifs += $sam
+    }
+}
+
+$wbActifs.Close($false)
+$excelLecture.Quit()
+[System.Runtime.InteropServices.Marshal]::ReleaseComObject($excelLecture) | Out-Null
+Write-Host "Actifs chargés : $($listeActifs.Count)" -ForegroundColor Cyan
+
+# ============================================================
+# RÉCUPÉRATION AD
+# ============================================================
+$groupes = Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} | Sort-Object Name
+
+$utilisateurs = $groupes | ForEach-Object {
+    Get-ADGroupMember -Identity $_ -Recursive | Where-Object { $_.objectClass -eq "user" }
+} | Sort-Object SamAccountName | Select-Object -Unique -Property Name, SamAccountName
+
+# ============================================================
+# CROISEMENT
+# ============================================================
+$samsAD     = $utilisateurs | ForEach-Object { $_.SamAccountName.ToLower() }
+$aSupprimer = $samsAD     | Where-Object { $listeActifs -notcontains $_ }
+$aAjouter   = $listeActifs | Where-Object { $samsAD -notcontains $_ }
+
+Write-Host "A supprimer : $($aSupprimer.Count)" -ForegroundColor Red
+Write-Host "A ajouter   : $($aAjouter.Count)"   -ForegroundColor Blue
+
+# ============================================================
+# EXPORT EXCEL
+# ============================================================
+$excel = New-Object -ComObject Excel.Application
+$excel.Visible = $false
+$wb = $excel.Workbooks.Add()
+$ws = $wb.Worksheets.Item(1)
+$ws.Name = "Matrice Droits"
+
+$nbGroupes = $groupes.Count
+
+# --- EN-TÊTES ---
+$ws.Cells.Item(1,1).Value2 = "Utilisateur"
+$ws.Cells.Item(1,1).Font.Bold = $true
+$ws.Cells.Item(1,1).Interior.Color = Get-ExcelColor 31 73 125
+$ws.Cells.Item(1,1).Font.Color = 0xFFFFFF
+$ws.Cells.Item(1,1).RowHeight = 80
+
+$colIndex = 2
+$colorIndex = 0
+foreach ($groupe in $groupes) {
+    $cell = $ws.Cells.Item(1, $colIndex)
+    $cell.Value2 = $groupe.Name
+    $cell.Font.Bold = $true
+    $cell.Font.Color = 0xFFFFFF
+    $cell.Interior.Color = $palette[$colorIndex % $palette.Count]
+    $cell.Font.Color = Get-ExcelColor 31 73 125
+    $cell.Orientation = 90
+    $cell.HorizontalAlignment = -4108
+    $cell.VerticalAlignment = -4107
+    $ws.Columns.Item($colIndex).ColumnWidth = 4
+    foreach ($edge in @(7,8,9,10)) {
+        $cell.Borders.Item($edge).LineStyle = 1
+        $cell.Borders.Item($edge).Weight = 2
+        $cell.Borders.Item($edge).Color = 0x000000
+    }
+    $colIndex++
+    $colorIndex++
+}
+
+# ============================================================
+# FONCTION POUR ÉCRIRE UNE LIGNE UTILISATEUR
+# ============================================================
+function Write-UserRow {
+    param($ws, $row, $sam, $groupes, $couleurFond, $couleurX)
+
+    $ws.Cells.Item($row, 1).Value2 = $sam
+    $ws.Cells.Item($row, 1).Interior.Color = $couleurFond
+    $ws.Cells.Item($row, 1).Font.Bold = $false
+    $ws.Rows.Item($row).RowHeight = 11
+
+    foreach ($edge in @(7,8,9,10)) {
+        $ws.Cells.Item($row,1).Borders.Item($edge).LineStyle = 1
+        $ws.Cells.Item($row,1).Borders.Item($edge).Weight = 2
+        $ws.Cells.Item($row,1).Borders.Item($edge).Color = 0x000000
+    }
+
+    $colIdx = 2
+    $colorIdx = 0
+    foreach ($groupe in $groupes) {
+        try {
+            $membres = Get-ADGroupMember -Identity $groupe -Recursive |
+                       Where-Object { $_.objectClass -eq "user" } |
+                       ForEach-Object { $_.SamAccountName.ToLower() }
+            $estMembre = $membres -contains $sam.ToLower()
+        } catch { $estMembre = $false }
+
+        $cell = $ws.Cells.Item($row, $colIdx)
+        if ($estMembre) {
+            $cell.Value2 = "+"
+            $cell.Font.Bold = $true
+            $cell.Interior.Color = $couleurX
+        } else {
+            $cell.Interior.Color = $palette[$colorIdx % $palette.Count]
+        }
+        foreach ($edge in @(7,8,9,10)) {
+            $cell.Borders.Item($edge).LineStyle = 1
+            $cell.Borders.Item($edge).Weight = 2
+            $cell.Borders.Item($edge).Color = 0x000000
+        }
+        $colIdx++
+        $colorIdx++
+    }
+}
+
+# ============================================================
+# BLOC 1 - UTILISATEURS ACTIFS (présents dans les actifs)
+# ============================================================
+$rowCurrent = 2
+$utilisateursActifs = $utilisateurs | Where-Object { $listeActifs -contains $_.SamAccountName.ToLower() }
+
+foreach ($user in $utilisateursActifs) {
+    Write-UserRow -ws $ws -row $rowCurrent -sam $user.SamAccountName `
+                  -groupes $groupes `
+                  -couleurFond (Get-ExcelColor 242 242 242) `
+                  -couleurX    (Get-ExcelColor 0 176 80)
+    $rowCurrent++
+}
+
+# ============================================================
+# BLOC 2 - SÉPARATEUR + TITRE "A SUPPRIMER" (rose)
+# ============================================================
+$rowCurrent++
+$ws.Cells.Item($rowCurrent, 1).Value2 = "⚠ COMPTES A SUPPRIMER (dans AD mais absents des actifs)"
+$ws.Cells.Item($rowCurrent, 1).Font.Bold = $true
+$ws.Cells.Item($rowCurrent, 1).Font.Color = Get-ExcelColor 150 0 0
+$ws.Cells.Item($rowCurrent, 1).Interior.Color = Get-ExcelColor 255 199 206
+$ws.Rows.Item($rowCurrent).RowHeight = 15
+$rowCurrent++
+
+foreach ($sam in $aSupprimer) {
+    Write-UserRow -ws $ws -row $rowCurrent -sam $sam `
+                  -groupes $groupes `
+                  -couleurFond (Get-ExcelColor 255 199 206) `
+                  -couleurX    (Get-ExcelColor 255 80 80)
+    $rowCurrent++
+}
+
+# ============================================================
+# BLOC 3 - SÉPARATEUR + TITRE "A AJOUTER" (bleu)
+# ============================================================
+$rowCurrent++
+$ws.Cells.Item($rowCurrent, 1).Value2 = "⚠ COMPTES A AJOUTER (dans les actifs mais absents de l'AD)"
+$ws.Cells.Item($rowCurrent, 1).Font.Bold = $true
+$ws.Cells.Item($rowCurrent, 1).Font.Color = Get-ExcelColor 0 70 150
+$ws.Cells.Item($rowCurrent, 1).Interior.Color = Get-ExcelColor 189 215 238
+$ws.Rows.Item($rowCurrent).RowHeight = 15
+$rowCurrent++
+
+foreach ($sam in $aAjouter) {
+    # Ces utilisateurs ne sont pas dans AD donc pas de membres à vérifier
+    $ws.Cells.Item($rowCurrent, 1).Value2 = $sam
+    $ws.Cells.Item($rowCurrent, 1).Interior.Color = Get-ExcelColor 189 215 238
+    $ws.Rows.Item($rowCurrent).RowHeight = 11
+    foreach ($edge in @(7,8,9,10)) {
+        $ws.Cells.Item($rowCurrent,1).Borders.Item($edge).LineStyle = 1
+        $ws.Cells.Item($rowCurrent,1).Borders.Item($edge).Weight = 2
+        $ws.Cells.Item($rowCurrent,1).Borders.Item($edge).Color = 0x000000
+    }
+    # Cellules groupes vides en bleu clair
+    for ($c = 2; $c -le ($nbGroupes + 1); $c++) {
+        $ws.Cells.Item($rowCurrent, $c).Interior.Color = Get-ExcelColor 210 228 245
+        foreach ($edge in @(7,8,9,10)) {
+            $ws.Cells.Item($rowCurrent,$c).Borders.Item($edge).LineStyle = 1
+            $ws.Cells.Item($rowCurrent,$c).Borders.Item($edge).Weight = 2
+            $ws.Cells.Item($rowCurrent,$c).Borders.Item($edge).Color = 0x000000
+        }
+    }
+    $rowCurrent++
+}
+
+# ============================================================
+# COLONNE UTILISATEUR LARGEUR + FIGER VOLETS
+# ============================================================
+$ws.Columns.Item(1).ColumnWidth = 25
+$ws.Application.ActiveWindow.SplitRow    = 1
+$ws.Application.ActiveWindow.SplitColumn = 1
+$ws.Application.ActiveWindow.FreezePanes = $true
+
+# ============================================================
+# SAUVEGARDE
+# ============================================================
+$fichier = "C:\Users\x\Downloads\matrice_droits.xlsx"
+$wb.SaveAs($fichier)
+$wb.Close()
+$excel.Quit()
+[System.Runtime.InteropServices.Marshal]::ReleaseComObject($excel) | Out-Null
+
+Write-Host "Export terminé : $fichier" -ForegroundColor Green
+Write-Host "  Actifs      : $($utilisateursActifs.Count) utilisateurs" -ForegroundColor White
+Write-Host "  A supprimer : $($aSupprimer.Count) en rose"              -ForegroundColor Red
+Write-Host "  A ajouter   : $($aAjouter.Count) en bleu"               -ForegroundColor Blue
+```
+
+---
+
+**Résultat visuel :**
+
+```
+[ EN-TÊTE GROUPES ]
+──────────────────────────────────────────
+  user1    |  +  |     |  +  |     |  +  |   ← actifs normaux
+  user2    |     |  +  |     |  +  |     |
+──────────────────────────────────────────
+  ⚠ COMPTES A SUPPRIMER
+  userX    | 🔴  | 🔴  |     | 🔴  |     |   ← rose
+──────────────────────────────────────────
+  ⚠ COMPTES A AJOUTER
+  userY    | 🔵  | 🔵  | 🔵  | 🔵  | 🔵  |   ← bleu (vide, pas dans AD)
+```
