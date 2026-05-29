@@ -1,1033 +1,46 @@
-# Matrice des droits AD - Approche PowerShell + Excel
-
-## Stratégie globale
-
-```
-AD (Users/Groups) → PowerShell → CSV/Excel → Matrice croisée
-```
-
----
-
-## Script PowerShell complet
-
-```powershell
-# ============================================
-# Prérequis : Module ActiveDirectory
-# Install-WindowsFeature RSAT-AD-PowerShell
-# ============================================
-
-Import-Module ActiveDirectory
-
-# ---- PARAMÈTRES À ADAPTER ----
-$OUBase        = "OU=Equipes,DC=mondomaine,DC=local"
-$OutputPath    = "C:\Export\MatriceDroits_$(Get-Date -Format 'yyyyMMdd').xlsx"
-$CSVPath       = "C:\Export\MatriceDroits_$(Get-Date -Format 'yyyyMMdd').csv"
-
-# ==============================
-# 1. COLLECTE DES DONNÉES
-# ==============================
-
-Write-Host "[1/4] Récupération des groupes..." -ForegroundColor Cyan
-
-$Groupes = Get-ADGroup -Filter * -SearchBase $OUBase -Properties Description, Members |
-    Sort-Object Name
-
-Write-Host "[2/4] Récupération des utilisateurs et leurs groupes..." -ForegroundColor Cyan
-
-$Utilisateurs = Get-ADUser -Filter * -SearchBase $OUBase -Properties DisplayName, 
-    SamAccountName, MemberOf, EmailAddress, Department, Title |
-    Sort-Object DisplayName
-
-# ==============================
-# 2. CONSTRUCTION DE LA MATRICE
-# ==============================
-
-Write-Host "[3/4] Construction de la matrice..." -ForegroundColor Cyan
-
-# Récupère les noms des groupes pour les colonnes
-$NomGroupes = $Groupes | Select-Object -ExpandProperty Name
-
-$Matrice = foreach ($User in $Utilisateurs) {
-    
-    # Groupes de l'utilisateur (noms seulement)
-    $GroupesUser = $User.MemberOf | ForEach-Object {
-        (Get-ADGroup $_).Name
-    }
-    
-    # Objet de base
-    $Ligne = [ordered]@{
-        "DisplayName"    = $User.DisplayName
-        "Login"          = $User.SamAccountName
-        "Email"          = $User.EmailAddress
-        "Département"    = $User.Department
-        "Titre"          = $User.Title
-    }
-    
-    # Colonne par groupe : X si membre, vide sinon
-    foreach ($Groupe in $NomGroupes) {
-        $Ligne[$Groupe] = if ($GroupesUser -contains $Groupe) { "X" } else { "" }
-    }
-    
-    [PSCustomObject]$Ligne
-}
-
-# ==============================
-# 3. EXPORT CSV (toujours utile)
-# ==============================
-
-$Matrice | Export-Csv -Path $CSVPath -NoTypeInformation -Encoding UTF8 -Delimiter ";"
-Write-Host "    CSV exporté : $CSVPath" -ForegroundColor Green
-
-# ==============================
-# 4. EXPORT EXCEL (avec mise en forme)
-# ==============================
-
-Write-Host "[4/4] Génération du fichier Excel..." -ForegroundColor Cyan
-
-# Nécessite le module ImportExcel
-# Install-Module ImportExcel -Scope CurrentUser
-
-if (Get-Module -ListAvailable -Name ImportExcel) {
-    
-    $ExcelParams = @{
-        Path            = $OutputPath
-        WorksheetName   = "Matrice Utilisateurs-Groupes"
-        AutoSize        = $true
-        AutoFilter      = $true
-        FreezeTopRow    = $true
-        BoldTopRow      = $true
-        TableName       = "MatriceDroits"
-        TableStyle      = "Medium6"
-        PassThru        = $true
-    }
-    
-    $Excel = $Matrice | Export-Excel @ExcelParams
-    
-    # --- Mise en forme conditionnelle ---
-    $Ws = $Excel.Workbook.Worksheets["Matrice Utilisateurs-Groupes"]
-    
-    # Colorier les "X" en vert
-    $NbColonnes = $Matrice[0].PSObject.Properties.Name.Count
-    $NbLignes   = $Matrice.Count + 1  # +1 pour l'entête
-    $ColDebut   = 6  # Après les 5 colonnes d'info
-    
-    for ($Col = $ColDebut; $Col -le $NbColonnes; $Col++) {
-        for ($Row = 2; $Row -le $NbLignes; $Row++) {
-            $Cell = $Ws.Cells[$Row, $Col]
-            if ($Cell.Value -eq "X") {
-                $Cell.Style.Fill.PatternType = [OfficeOpenXml.Style.ExcelFillStyle]::Solid
-                $Cell.Style.Fill.BackgroundColor.SetColor([System.Drawing.Color]::LightGreen)
-                $Cell.Style.Font.Bold = $true
-                $Cell.Style.HorizontalAlignment = "Center"
-            }
-        }
-    }
-    
-    # Rotation des entêtes de groupes (lisibilité)
-    for ($Col = $ColDebut; $Col -le $NbColonnes; $Col++) {
-        $Ws.Cells[1, $Col].Style.TextRotation = 45
-    }
-    
-    Close-ExcelPackage $Excel
-    Write-Host "    Excel exporté : $OutputPath" -ForegroundColor Green
-
-} else {
-    Write-Warning "Module ImportExcel non trouvé. Seul le CSV a été généré."
-    Write-Host "    Installez-le via : Install-Module ImportExcel -Scope CurrentUser" -ForegroundColor Yellow
-}
-
-Write-Host "`n✅ Export terminé !" -ForegroundColor Green
-```
-
----
-
-## Bonus : Onglet inversé (Groupes → Membres)
-
-```powershell
-# Ajouter un 2ème onglet : vue par groupe
-
-$VueGroupes = foreach ($Groupe in $Groupes) {
-    
-    $Membres = Get-ADGroupMember -Identity $Groupe -Recursive | 
-        Where-Object { $_.objectClass -eq "user" } |
-        ForEach-Object { $_.SamAccountName }
-    
-    [PSCustomObject]@{
-        "Groupe"       = $Groupe.Name
-        "Description"  = $Groupe.Description
-        "NbMembres"    = $Membres.Count
-        "Membres"      = ($Membres -join ", ")
-    }
-}
-
-# Ajout dans le même fichier Excel
-$VueGroupes | Export-Excel -Path $OutputPath `
-    -WorksheetName "Vue par Groupe" `
-    -AutoSize -AutoFilter -BoldTopRow `
-    -TableName "VueGroupes" -TableStyle "Medium4"
-```
-
----
-
-## Résultat attendu
-
-```
-Excel avec 2 onglets :
-
-[Matrice Utilisateurs-Groupes]
-┌─────────────────┬────────┬──────┬──────────┬──────────────┬────────────┐
-│ DisplayName     │ Login  │ Dept │ GRP_RH   │ GRP_FINANCE  │ GRP_ADMIN  │
-├─────────────────┼────────┼──────┼──────────┼──────────────┼────────────┤
-│ Alice Martin    │ amartin│ RH   │    X     │              │            │
-│ Bob Dupont      │ bdupont│ FIN  │          │      X       │            │
-│ Claire Durand   │ cdurand│ IT   │          │              │     X      │
-└─────────────────┴────────┴──────┴──────────┴──────────────┴────────────┘
-
-[Vue par Groupe]
-┌──────────────┬─────────────────────┬───────────┬─────────────────────┐
-│ Groupe       │ Description         │ NbMembres │ Membres             │
-├──────────────┼─────────────────────┼───────────┼─────────────────────┤
-│ GRP_RH       │ Équipe RH           │ 5         │ amartin, jleblanc...│
-└──────────────┴─────────────────────┴───────────┴─────────────────────┘
-```
-
----
-
-## Points clés
-
-| Élément | Détail |
-|---|---|
-| **Module requis** | `ImportExcel` (gratuit, pas besoin d'Excel installé sur le serveur) |
-| **Droits AD** | Lecture seule suffit |
-| **Perf** | Préférer `-Recursive` avec précaution sur grands domaines |
-| **Filtrage** | Adapter `$OUBase` ou ajouter `-Filter {Department -eq "IT"}` |
-
-> 💡 **Tip** : Sur un grand AD, remplacez les appels `Get-ADGroup` dans la boucle par un **hashtable préconstruit** pour éviter des milliers de requêtes AD
-
-
-
-# Filtrage des groupes par préfixe
-
-## Modification simple du filtre
-
-```powershell
-# Remplacer la ligne Get-ADGroup par :
-
-$Groupes = Get-ADGroup -Filter { Name -like "GG_F_CDAD-BDX*" } `
-    -Properties Description, Members |
-    Sort-Object Name
-```
-
----
-
-## Script adapté complet
-
-```powershell
-Import-Module ActiveDirectory
-
-# ---- PARAMÈTRES ----
-$Prefixe       = "GG_F_CDAD-BDX*"
-$OUBase        = "DC=mondomaine,DC=local"   # Adapter
-$OutputPath    = "C:\Export\MatriceDroits_$(Get-Date -Format 'yyyyMMdd').xlsx"
-
-# ==============================
-# 1. COLLECTE
-# ==============================
-
-Write-Host "[1/4] Récupération des groupes GG_F_CDAD-BDX..." -ForegroundColor Cyan
-
-$Groupes = Get-ADGroup -Filter { Name -like "GG_F_CDAD-BDX*" } `
-    -Properties Description, Members |
-    Sort-Object Name
-
-Write-Host "    → $($Groupes.Count) groupes trouvés" -ForegroundColor Green
-
-# Affichage rapide des groupes trouvés (contrôle visuel)
-$Groupes | Select-Object Name, Description | Format-Table -AutoSize
-```
-
----
-
-## Tip : Nommage des colonnes raccourci
-
-Les noms de groupes étant longs, vous pouvez **tronquer le préfixe commun** dans les entêtes Excel pour gagner de la place :
-
-```powershell
-# Au lieu du nom complet "GG_F_CDAD-BDX_RH_Lecture"
-# La colonne affichera juste "_RH_Lecture"
-
-$NomGroupes = $Groupes | ForEach-Object {
-    $_.Name -replace "^GG_F_CDAD-BDX", ""
-}
-
-# Mais on garde le nom complet dans un hashtable pour la logique
-$MapGroupes = @{}
-for ($i = 0; $i -lt $Groupes.Count; $i++) {
-    $MapGroupes[$NomGroupes[$i]] = $Groupes[$i].Name
-}
-
-# Dans la boucle utilisateurs :
-foreach ($NomCourt in $NomGroupes) {
-    $NomComplet = $MapGroupes[$NomCourt]
-    $Ligne[$NomCourt] = if ($GroupesUser -contains $NomComplet) { "X" } else { "" }
-}
-```
-
----
-
-## Résultat dans Excel
-
-```
-Avant :
-┌──────────────────────────────┬──────────────────────────────┐
-│ GG_F_CDAD-BDX_RH_Lecture    │ GG_F_CDAD-BDX_Finance_Admin  │
-
-Après (colonne raccourcie) :
-┌──────────────┬───────────────┐
-│ _RH_Lecture  │ _Finance_Admin│
-```
-
-> 💡 **Tip** : Avec la rotation à 45° des entêtes vue précédemment, même les noms longs restent lisibles sans trop élargir les colonnes.
-
----
-
-Pouvez-vous me donner un exemple de nom complet de groupe ? (ex: `GG_F_CDAD-BDX_RH_Lecture`) pour qu'on adapte **le découpage intelligent** des colonnes selon votre convention de nommage ?
-
-
-
-
-
-
-
-
-
-
-
-# Commandes PowerShell directes
-
-## Groupes + tous leurs membres
-
-```powershell
-Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} | ForEach-Object { 
-    Write-Host "`n=== $($_.Name) ===" -ForegroundColor Cyan
-    Get-ADGroupMember -Identity $_ -Recursive | 
-    Where-Object {$_.objectClass -eq "user"} | 
-    Select-Object Name, SamAccountName | 
-    Format-Table -AutoSize 
-}
-```
-
----
-
-## Utilisateur + tous ses groupes GG_F_CDAD-BDX
-
-```powershell
-Get-ADUser -Filter * -Properties MemberOf, DisplayName | ForEach-Object {
-    $groupes = $_.MemberOf | ForEach-Object { Get-ADGroup $_ } | 
-    Where-Object { $_.Name -like "GG_F_CDAD-BDX*" }
-    if ($groupes) {
-        Write-Host "`n=== $($_.DisplayName) ===" -ForegroundColor Yellow
-        $groupes | Select-Object Name | Format-Table -AutoSize
-    }
-}
-```
-
----
-
-## Export rapide en CSV si besoin
-
-```powershell
-Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} | ForEach-Object {
-    $groupe = $_.Name
-    Get-ADGroupMember -Identity $_ -Recursive | 
-    Where-Object {$_.objectClass -eq "user"} | 
-    Select-Object @{N="Groupe";E={$groupe}}, Name, SamAccountName
-} | Export-Csv "C:\export.csv" -NoTypeInformation -Delimiter ";" -Encoding UTF8
-```
-
-> 💡 Lancez ces commandes **une par une** selon ce que vous voulez voir
-
-
-
-
-
-
-
-
-```powershell
-Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} | ForEach-Object {
-    $groupe = $_.Name
-    Get-ADGroupMember -Identity $_ -Recursive | 
-    Where-Object {$_.objectClass -eq "user"} | 
-    Select-Object @{N="Groupe";E={$groupe}}, Name, SamAccountName
-} | Export-Csv "C:\export.csv" -NoTypeInformation -Delimiter ";" -Encoding UTF8
-```
-
-> ✅ Cette commande va :
-> - Chercher **tous les groupes** `GG_F_CDAD-BDX*`
-> - Lister **tous les utilisateurs** de chaque groupe
-> - Exporter dans **`C:\export.csv`** ouvrable directement dans Excel
-
-
-
-
-
-
-```powershell
-Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} | 
-Select-Object Name | 
-Export-Csv "C:\export.csv" -NoTypeInformation -Delimiter ";" -Encoding UTF8
-```
-
-> ✅ Exporte uniquement les **noms des groupes** + affiche le **nombre total** à la fin
-
-Si vous voulez aussi voir le total dans le CSV :
-
-```powershell
-$groupes = Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} | Select-Object Name
-Write-Host "Nombre total de groupes : $($groupes.Count)" -ForegroundColor Green
-$groupes | Export-Csv "C:\export.csv" -NoTypeInformation -Delimiter ";" -Encoding UTF8
-```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-```powershell
-# Récupération des données
-$groupes = Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} | Sort-Object Name
-$utilisateurs = Get-ADUser -Filter * -Properties MemberOf, DisplayName | Sort-Object DisplayName
-
-# Construction de la matrice
-$matrice = foreach ($user in $utilisateurs) {
-    $groupesUser = $user.MemberOf | ForEach-Object { (Get-ADGroup $_).Name }
-    
-    $ligne = [ordered]@{ "Utilisateur" = $user.DisplayName }
-    
-    foreach ($groupe in $groupes) {
-        $ligne[$groupe.Name] = if ($groupesUser -contains $groupe.Name) { "X" } else { "" }
-    }
-    [PSCustomObject]$ligne
-}
-
-# Export
-$matrice | Export-Csv "C:\matrice.csv" -NoTypeInformation -Delimiter ";" -Encoding UTF8
-Write-Host "Export terminé : C:\matrice.csv" -ForegroundColor Green
-```
-
-> ✅ Le fichier Excel aura :
-> - **Colonne gauche** → nom des utilisateurs
-> - **Colonnes du haut** → chaque groupe `GG_F_CDAD-BDX*`
-> - **X** → là où l'utilisateur est membre du groupe
-
-
-
-
-
-
-
-```powershell
-# Récupération des groupes
-$groupes = Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} | Sort-Object Name
-
-# Récupération uniquement des utilisateurs membres d'au moins un de ces groupes
-$utilisateurs = $groupes | ForEach-Object {
-    Get-ADGroupMember -Identity $_ -Recursive | Where-Object { $_.objectClass -eq "user" }
-} | Sort-Object Name | Select-Object -Unique -Property Name, SamAccountName, distinguishedName
-
-# Construction de la matrice
-$matrice = foreach ($user in $utilisateurs) {
-    $userAD = Get-ADUser $user.SamAccountName -Properties MemberOf, DisplayName
-    $groupesUser = $userAD.MemberOf | ForEach-Object { (Get-ADGroup $_).Name }
-    
-    $ligne = [ordered]@{ "Utilisateur" = $userAD.DisplayName }
-    
-    foreach ($groupe in $groupes) {
-        $ligne[$groupe.Name] = if ($groupesUser -contains $groupe.Name) { "X" } else { "" }
-    }
-    [PSCustomObject]$ligne
-}
-
-# Export
-$matrice | Export-Csv "C:\matrice.csv" -NoTypeInformation -Delimiter ";" -Encoding UTF8
-Write-Host "Export terminé : C:\matrice.csv" -ForegroundColor Green
-```
-
-> ✅ Seuls les utilisateurs **membres d'au moins un groupe** `GG_F_CDAD-BDX*` apparaîtront dans la matrice
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Oui c'est possible avec le module **ImportExcel** !
-
-**Installation :**
-```powershell
-Install-Module ImportExcel -Scope CurrentUser
-```
-
-```powershell
-Import-Module ImportExcel
-
-# Récupération des groupes
-$groupes = Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} | Sort-Object Name
-
-# Récupération des utilisateurs
-$utilisateurs = $groupes | ForEach-Object {
-    Get-ADGroupMember -Identity $_ -Recursive | Where-Object { $_.objectClass -eq "user" }
-} | Sort-Object Name | Select-Object -Unique -Property Name, SamAccountName, distinguishedName
-
-# Construction de la matrice
-$matrice = foreach ($user in $utilisateurs) {
-    $userAD = Get-ADUser $user.SamAccountName -Properties MemberOf, DisplayName
-    $groupesUser = $userAD.MemberOf | ForEach-Object { (Get-ADGroup $_).Name }
-    
-    $ligne = [ordered]@{ "Utilisateur" = $userAD.DisplayName }
-    
-    foreach ($groupe in $groupes) {
-        $ligne[$groupe.Name] = if ($groupesUser -contains $groupe.Name) { "X" } else { "" }
-    }
-    [PSCustomObject]$ligne
-}
-
-$fichier = "C:\matrice_droits.xlsx"
-$matrice | Export-Excel -Path $fichier -WorksheetName "Matrice" -AutoSize -PassThru | ForEach-Object {
-    $ws = $_.Workbook.Worksheets["Matrice"]
-    
-    # Nombre de colonnes et lignes
-    $nbCol = $ws.Dimension.Columns
-    $nbLig = $ws.Dimension.Rows
-
-    # ---- LIGNE D'EN-TÊTE ----
-    for ($col = 1; $col -le $nbCol; $col++) {
-        $cell = $ws.Cells[1, $col]
-        
-        # Couleur fond bleu foncé + texte blanc
-        $cell.Style.Fill.PatternType = [OfficeOpenXml.Style.ExcelFillStyle]::Solid
-        $cell.Style.Fill.BackgroundColor.SetColor([System.Drawing.Color]::FromArgb(31, 73, 125))
-        $cell.Style.Font.Color.SetColor([System.Drawing.Color]::White)
-        $cell.Style.Font.Bold = $true
-        
-        # Rotation du texte vers le haut (sauf colonne Utilisateur)
-        if ($col -gt 1) {
-            $cell.Style.TextRotation = 90
-        }
-        
-        # Alignement centré
-        $cell.Style.HorizontalAlignment = [OfficeOpenXml.Style.ExcelHorizontalAlignment]::Center
-        $cell.Style.VerticalAlignment = [OfficeOpenXml.Style.ExcelVerticalAlignment]::Bottom
-    }
-
-    # ---- LIGNES DE DONNÉES ----
-    for ($lig = 2; $lig -le $nbLig; $lig++) {
-        
-        # Alternance de couleurs (zébrage)
-        $couleurFond = if ($lig % 2 -eq 0) {
-            [System.Drawing.Color]::FromArgb(220, 230, 241)  # Bleu clair
-        } else {
-            [System.Drawing.Color]::White
-        }
-        
-        for ($col = 1; $col -le $nbCol; $col++) {
-            $cell = $ws.Cells[$lig, $col]
-            
-            # Fond zébré
-            $cell.Style.Fill.PatternType = [OfficeOpenXml.Style.ExcelFillStyle]::Solid
-            $cell.Style.Fill.BackgroundColor.SetColor($couleurFond)
-            
-            # Si la cellule contient X → vert + gras
-            if ($cell.Value -eq "X") {
-                $cell.Style.Fill.BackgroundColor.SetColor([System.Drawing.Color]::FromArgb(0, 176, 80))
-                $cell.Style.Font.Color.SetColor([System.Drawing.Color]::White)
-                $cell.Style.Font.Bold = $true
-                $cell.Style.HorizontalAlignment = [OfficeOpenXml.Style.ExcelHorizontalAlignment]::Center
-            }
-        }
-    }
-
-    # ---- FIGER LA PREMIÈRE LIGNE ET COLONNE ----
-    $ws.View.FreezePanes(2, 2)
-
-    # ---- HAUTEUR DE LA LIGNE D'EN-TÊTE ----
-    $ws.Row(1).Height = 120
-
-    # Sauvegarde
-    $_.Save()
-}
-
-Write-Host "Export terminé : $fichier" -ForegroundColor Green
-```
-
-**Résultat :**
-| Fonctionnalité | Détail |
-|---|---|
-| 🔵 En-tête | Fond bleu foncé, texte blanc, gras |
-| 🔄 Rotation | Texte des groupes à 90° |
-| 🟢 Croix X | Fond vert, texte blanc, gras |
-| zebré | Lignes alternées blanc/bleu clair |
-| 📌 Figé | Ligne 1 et colonne 1 figées au scroll |
-
-
-
-
-
-
-
-
-
-
-
-
-
-Sans module externe, on est limité à **COM Object Excel** (si Excel est installé sur la machine) :
-
-```powershell
-# Récupération des groupes
-$groupes = Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} | Sort-Object Name
-
-# Récupération des utilisateurs
-$utilisateurs = $groupes | ForEach-Object {
-    Get-ADGroupMember -Identity $_ -Recursive | Where-Object { $_.objectClass -eq "user" }
-} | Sort-Object Name | Select-Object -Unique -Property Name, SamAccountName, distinguishedName
-
-# Construction de la matrice
-$matrice = foreach ($user in $utilisateurs) {
-    $userAD = Get-ADUser $user.SamAccountName -Properties MemberOf, DisplayName
-    $groupesUser = $userAD.MemberOf | ForEach-Object { (Get-ADGroup $_).Name }
-    $ligne = [ordered]@{ "Utilisateur" = $userAD.DisplayName }
-    foreach ($groupe in $groupes) {
-        $ligne[$groupe.Name] = if ($groupesUser -contains $groupe.Name) { "X" } else { "" }
-    }
-    [PSCustomObject]$ligne
-}
-
-# ---- EXCEL VIA COM ----
-$excel = New-Object -ComObject Excel.Application
-$excel.Visible = $false
-$wb = $excel.Workbooks.Add()
-$ws = $wb.Worksheets.Item(1)
-$ws.Name = "Matrice Droits"
-
-$colonnes = $matrice[0].PSObject.Properties.Name
-
-# ---- EN-TÊTE ----
-for ($col = 0; $col -lt $colonnes.Count; $col++) {
-    $cell = $ws.Cells.Item(1, $col + 1)
-    $cell.Value2 = $colonnes[$col]
-    $cell.Font.Bold = $true
-    $cell.Font.Color = [System.Runtime.InteropServices.Marshal]::GetActiveObject
-    
-    # Fond bleu foncé
-    $cell.Interior.Color = 0x7D3F1F  # BGR format
-    $cell.Interior.Color = [System.Drawing.ColorTranslator]::ToOle([System.Drawing.Color]::FromArgb(31, 73, 125))
-    $cell.Font.ColorIndex = 2  # Blanc
-    
-    # Rotation texte sauf première colonne
-    if ($col -gt 0) {
-        $cell.Orientation = 90
-    }
-    
-    $cell.HorizontalAlignment = -4108  # xlCenter
-    $cell.VerticalAlignment = -4107    # xlBottom
-}
-
-# Hauteur ligne en-tête
-$ws.Rows.Item(1).RowHeight = 120
-
-# ---- DONNÉES ----
-for ($lig = 0; $lig -lt $matrice.Count; $lig++) {
-    $ligne = $matrice[$lig]
-    $excelLig = $lig + 2
-    
-    for ($col = 0; $col -lt $colonnes.Count; $col++) {
-        $cell = $ws.Cells.Item($excelLig, $col + 1)
-        $valeur = $ligne.($colonnes[$col])
-        $cell.Value2 = $valeur
-        
-        # X = vert
-        if ($valeur -eq "X") {
-            $cell.Interior.Color = [System.Drawing.ColorTranslator]::ToOle([System.Drawing.Color]::FromArgb(0, 176, 80))
-            $cell.Font.ColorIndex = 2
-            $cell.Font.Bold = $true
-            $cell.HorizontalAlignment = -4108
-        } else {
-            # Zébrage
-            if ($excelLig % 2 -eq 0) {
-                $cell.Interior.Color = [System.Drawing.ColorTranslator]::ToOle([System.Drawing.Color]::FromArgb(220, 230, 241))
-            } else {
-                $cell.Interior.ColorIndex = 2  # Blanc
-            }
-        }
-    }
-}
-
-# ---- FIGER VOLETS ----
-$ws.Cells.Item(2, 2).Select()
-$excel.ActiveWindow.FreezePanes = $true
-
-# ---- AJUSTEMENT COLONNES ----
-$ws.Columns.AutoFit()
-
-# ---- SAUVEGARDE ----
-$fichier = "C:\matrice_droits.xlsx"
-$wb.SaveAs($fichier)
-$wb.Close()
-$excel.Quit()
-[System.Runtime.InteropServices.Marshal]::ReleaseComObject($excel) | Out-Null
-
-Write-Host "Export terminé : $fichier" -ForegroundColor Green
-```
-
----
-
-**Comparaison des options :**
-
-| | COM Object | ImportExcel |
-|---|---|---|
-| Installation requise | ❌ Non | ✅ Oui |
-| Excel requis | ✅ Oui | ❌ Non |
-| Performances | 🐢 Plus lent | ⚡ Rapide |
-| Fonctionnalités | ✅ Complètes | ✅ Complètes |
-
-> ⚠️ **COM Object** fonctionne uniquement si **Microsoft Excel est installé** sur la machine où tourne le script
-
-
-
-
-
-
-
-
-Les erreurs viennent de deux problèmes :
-
-1. `System.Drawing.ColorTranslator` **non disponible** nativement en PowerShell
-2. Une ligne de code incomplète que j'avais laissée par erreur
-
-**Il faut utiliser les couleurs en format BGR hexadécimal directement** avec COM Excel :
-
-```powershell
-# Fonction helper pour convertir RGB en BGR (format Excel COM)
-function Get-ExcelColor($r, $g, $b) {
-    return $r + ($g * 256) + ($b * 65536)
-}
-
-# Couleurs
-$couleurEnteteFond  = Get-ExcelColor 31  73  125   # Bleu foncé
-$couleurLignesPaire = Get-ExcelColor 220 230 241   # Bleu clair
-$couleurX           = Get-ExcelColor 0   176 80    # Vert
-
-# Récupération des groupes
-$groupes = Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} | Sort-Object Name
-
-# Récupération des utilisateurs
-$utilisateurs = $groupes | ForEach-Object {
-    Get-ADGroupMember -Identity $_ -Recursive | Where-Object { $_.objectClass -eq "user" }
-} | Sort-Object Name | Select-Object -Unique -Property Name, SamAccountName, distinguishedName
-
-# Construction de la matrice
-$matrice = foreach ($user in $utilisateurs) {
-    $userAD = Get-ADUser $user.SamAccountName -Properties MemberOf, DisplayName
-    $groupesUser = $userAD.MemberOf | ForEach-Object { (Get-ADGroup $_).Name }
-    $ligne = [ordered]@{ "Utilisateur" = $userAD.DisplayName }
-    foreach ($groupe in $groupes) {
-        $ligne[$groupe.Name] = if ($groupesUser -contains $groupe.Name) { "X" } else { "" }
-    }
-    [PSCustomObject]$ligne
-}
-
-# ---- EXCEL VIA COM ----
-$excel = New-Object -ComObject Excel.Application
-$excel.Visible = $false
-$wb = $excel.Workbooks.Add()
-$ws = $wb.Worksheets.Item(1)
-$ws.Name = "Matrice Droits"
-
-$colonnes = $matrice[0].PSObject.Properties.Name
-
-# ---- EN-TÊTE ----
-for ($col = 0; $col -lt $colonnes.Count; $col++) {
-    $cell = $ws.Cells.Item(1, $col + 1)
-    $cell.Value2 = $colonnes[$col]
-    $cell.Font.Bold = $true
-    $cell.Font.Color = 0xFFFFFF          # Blanc
-    $cell.Interior.Color = $couleurEnteteFond
-    $cell.HorizontalAlignment = -4108    # xlCenter
-    $cell.VerticalAlignment = -4107      # xlBottom
-
-    # Rotation sauf première colonne
-    if ($col -gt 0) {
-        $cell.Orientation = 90
-    }
-}
-
-# Hauteur ligne en-tête
-$ws.Rows.Item(1).RowHeight = 120
-
-# ---- DONNÉES ----
-for ($lig = 0; $lig -lt $matrice.Count; $lig++) {
-    $ligne = $matrice[$lig]
-    $excelLig = $lig + 2
-
-    for ($col = 0; $col -lt $colonnes.Count; $col++) {
-        $cell = $ws.Cells.Item($excelLig, $col + 1)
-        $valeur = $ligne.($colonnes[$col])
-        $cell.Value2 = $valeur
-
-        if ($valeur -eq "X") {
-            # Vert + texte blanc + gras + centré
-            $cell.Interior.Color = $couleurX
-            $cell.Font.Color = 0xFFFFFF
-            $cell.Font.Bold = $true
-            $cell.HorizontalAlignment = -4108
-        } else {
-            # Zébrage
-            if ($excelLig % 2 -eq 0) {
-                $cell.Interior.Color = $couleurLignesPaire
-            } else {
-                $cell.Interior.ColorIndex = 2   # Blanc
-            }
-        }
-    }
-}
-
-# ---- FIGER VOLETS ----
-$ws.Cells.Item(2, 2).Select()
-$excel.ActiveWindow.FreezePanes = $true
-
-# ---- AJUSTEMENT COLONNES ----
-$ws.Columns.AutoFit()
-
-# ---- SAUVEGARDE ----
-$fichier = "C:\matrice_droits.xlsx"
-$wb.SaveAs($fichier)
-$wb.Close()
-$excel.Quit()
-[System.Runtime.InteropServices.Marshal]::ReleaseComObject($excel) | Out-Null
-
-Write-Host "Export terminé : $fichier" -ForegroundColor Green
-```
-
----
-
-**Ce qui a changé :**
-
-| Avant ❌ | Après ✅ |
-|---|---|
-| `[System.Drawing.ColorTranslator]::ToOle(...)` | `Get-ExcelColor R G B` |
-| `$cell.Font.Color = [Marshal]::GetA...` | `$cell.Font.Color = 0xFFFFFF` |
-
-
-
-
-
-
-
-
-
-Je vois le style ! Un tableau avec **colonnes colorées par catégorie**. Voici le script adapté :
-
 ```powershell
 function Get-ExcelColor($r, $g, $b) {
     return $r + ($g * 256) + ($b * 65536)
 }
 
-# Couleurs par préfixe de groupe
-function Get-GroupColor($groupName) {
-    if ($groupName -like "*FCT*")  { return Get-ExcelColor 189 215 238 }  # Bleu clair
-    if ($groupName -like "*ORG*")  { return Get-ExcelColor 198 239 206 }  # Vert clair
-    if ($groupName -like "*REF*")  { return Get-ExcelColor 255 235 156 }  # Jaune
-    if ($groupName -like "*INCI*") { return Get-ExcelColor 255 199 206 }  # Rouge clair
-    return Get-ExcelColor 220 220 220                                       # Gris par défaut
-}
-
-# Récupération des groupes
-$groupes = Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} | Sort-Object Name
-
-# Récupération des utilisateurs
-$utilisateurs = $groupes | ForEach-Object {
-    Get-ADGroupMember -Identity $_ -Recursive | Where-Object { $_.objectClass -eq "user" }
-} | Sort-Object SamAccountName | Select-Object -Unique -Property Name, SamAccountName
-
-# Construction de la matrice
-$matrice = foreach ($user in $utilisateurs) {
-    $userAD = Get-ADUser $user.SamAccountName -Properties MemberOf, DisplayName
-    $groupesUser = $userAD.MemberOf | ForEach-Object { (Get-ADGroup $_).Name }
-    $ligne = [ordered]@{ "Utilisateur" = $userAD.SamAccountName }
-    foreach ($groupe in $groupes) {
-        $ligne[$groupe.Name] = if ($groupesUser -contains $groupe.Name) { "+" } else { "" }
-    }
-    [PSCustomObject]$ligne
-}
-
-# ---- EXCEL VIA COM ----
-$excel = New-Object -ComObject Excel.Application
-$excel.Visible = $false
-$wb = $excel.Workbooks.Add()
-$ws = $wb.Worksheets.Item(1)
-$ws.Name = "Matrice Droits"
-
-$colonnes = $matrice[0].PSObject.Properties.Name
-
-# ---- EN-TÊTE avec couleur par groupe ----
-for ($col = 0; $col -lt $colonnes.Count; $col++) {
-    $cell = $ws.Cells.Item(1, $col + 1)
-    $cell.Value2 = $colonnes[$col]
-    $cell.Font.Bold = $true
-    $cell.Font.Size = 8
-    $cell.WrapText = $false
-
-    if ($col -eq 0) {
-        # Première colonne "Utilisateur"
-        $cell.Interior.Color = Get-ExcelColor 68 114 196   # Bleu foncé
-        $cell.Font.Color = 0xFFFFFF
-        $cell.VerticalAlignment = -4107   # xlBottom
-    } else {
-        # Couleur selon le type de groupe
-        $couleur = Get-GroupColor $colonnes[$col]
-        $cell.Interior.Color = $couleur
-        $cell.Font.Color = Get-ExcelColor 0 0 0   # Noir
-        $cell.Orientation = 90                     # Rotation verticale
-        $cell.VerticalAlignment = -4107
-        $cell.HorizontalAlignment = -4108
-    }
-}
-
-# Hauteur ligne en-tête
-$ws.Rows.Item(1).RowHeight = 130
-
-# ---- DONNÉES ----
-for ($lig = 0; $lig -lt $matrice.Count; $lig++) {
-    $ligne = $matrice[$lig]
-    $excelLig = $lig + 2
-
-    for ($col = 0; $col -lt $colonnes.Count; $col++) {
-        $cell = $ws.Cells.Item($excelLig, $col + 1)
-        $valeur = $ligne.($colonnes[$col])
-        $cell.Value2 = $valeur
-        $cell.Font.Size = 8
-
-        if ($col -eq 0) {
-            # Colonne utilisateur
-            $cell.Font.Bold = $false
-            if ($excelLig % 2 -eq 0) {
-                $cell.Interior.Color = Get-ExcelColor 242 242 242
-            } else {
-                $cell.Interior.ColorIndex = 2
-            }
-        } elseif ($valeur -eq "+") {
-            # Croix = couleur du groupe correspondant (plus foncée)
-            $couleur = Get-GroupColor $colonnes[$col]
-            $cell.Interior.Color = $couleur
-            $cell.HorizontalAlignment = -4108
-            $cell.Font.Bold = $true
-        } else {
-            # Case vide avec légère teinte de la couleur du groupe
-            if ($excelLig % 2 -eq 0) {
-                $cell.Interior.Color = Get-ExcelColor 242 242 242
-            } else {
-                $cell.Interior.ColorIndex = 2
-            }
-            # Bordure fine
-            $cell.Borders.LineStyle = 1
-            $cell.Borders.Weight = 1
-        }
-    }
-    
-    # Hauteur de ligne réduite
-    $ws.Rows.Item($excelLig).RowHeight = 15
-}
-
-# ---- BORDURES EN-TÊTE ----
-$rangeEntete = $ws.Range($ws.Cells.Item(1,1), $ws.Cells.Item(1, $colonnes.Count))
-$rangeEntete.Borders.LineStyle = 1
-$rangeEntete.Borders.Weight = 2
-
-# ---- FIGER VOLETS ----
-$ws.Cells.Item(2, 2).Select()
-$excel.ActiveWindow.FreezePanes = $true
-
-# ---- LARGEUR COLONNES ----
-# Première colonne plus large
-$ws.Columns.Item(1).ColumnWidth = 20
-# Autres colonnes étroites
-for ($col = 2; $col -le $colonnes.Count; $col++) {
-    $ws.Columns.Item($col).ColumnWidth = 4
-}
-
-# ---- SAUVEGARDE ----
-$fichier = "C:\matrice_droits.xlsx"
-$wb.SaveAs($fichier)
-$wb.Close()
-$excel.Quit()
-[System.Runtime.InteropServices.Marshal]::ReleaseComObject($excel) | Out-Null
-
-Write-Host "Export terminé : $fichier" -ForegroundColor Green
-```
-
----
-
-**Ce qui reproduit le style de votre image :**
-
-| Élément | Style appliqué |
-|---|---|
-| En-têtes groupes | Rotation 90°, colorées par catégorie |
-| Colonnes groupes | Très étroites (largeur 4) |
-| Colonne utilisateur | Large (largeur 20) |
-| Marqueur appartenance | `+` avec couleur du groupe |
-| Lignes | Zébrées gris/blanc |
-| Volets | Figés sur ligne 2, colonne 2 |
-
-> ⚙️ **Adaptez les conditions** dans `Get-GroupColor` selon vos vrais préfixes de groupes !
-
-
-
-
-
-
-
-
-
-
-
-
-
-```powershell
-function Get-ExcelColor($r, $g, $b) {
-    return $r + ($g * 256) + ($b * 65536)
-}
-
-# Panel de 5 couleurs qui se répètent
 $palette = @(
-    (Get-ExcelColor 189 215 238),  # Bleu clair
-    (Get-ExcelColor 198 239 206),  # Vert clair
-    (Get-ExcelColor 255 235 156),  # Jaune
-    (Get-ExcelColor 255 199 206),  # Rouge clair
-    (Get-ExcelColor 226 198 255)   # Violet clair
+    (Get-ExcelColor 183  222  232),
+    (Get-ExcelColor 216  228  188),
+    (Get-ExcelColor 252 213   180),
+    (Get-ExcelColor 230  184  183),
+    (Get-ExcelColor 204  192  218)
 )
 
-# Récupération des groupes
+# ============================================================
+# LECTURE DU FICHIER EXCEL DES ACTIFS
+# ============================================================
+# Le fichier doit contenir une colonne "SamAccountName" ou "Login"
+$fichierActifs = "C:\Users\x\Downloads\actifs.xlsx"
+
+$excelLecture = New-Object -ComObject Excel.Application
+$excelLecture.Visible = $false
+$wbActifs = $excelLecture.Workbooks.Open($fichierActifs)
+$wsActifs = $wbActifs.Worksheets.Item(1)
+
+# Lecture de la colonne A (SamAccountName des actifs)
+$ligneMax = $wsActifs.UsedRange.Rows.Count
+$listeActifs = @()
+for ($i = 2; $i -le $ligneMax; $i++) {  # i=2 pour sauter l'en-tête
+    $val = $wsActifs.Cells.Item($i, 1).Value2
+    if ($val) { $listeActifs += $val.Trim().ToLower() }
+}
+
+$wbActifs.Close($false)
+$excelLecture.Quit()
+[System.Runtime.InteropServices.Marshal]::ReleaseComObject($excelLecture) | Out-Null
+
+Write-Host "Actifs chargés : $($listeActifs.Count) personnes" -ForegroundColor Cyan
+
+# ============================================================
+# RÉCUPÉRATION AD
+# ============================================================
 $groupes = Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} | Sort-Object Name
 
-# Récupération des utilisateurs
 $utilisateurs = $groupes | ForEach-Object {
     Get-ADGroupMember -Identity $_ -Recursive | Where-Object { $_.objectClass -eq "user" }
 } | Sort-Object SamAccountName | Select-Object -Unique -Property Name, SamAccountName
@@ -1043,150 +56,37 @@ $matrice = foreach ($user in $utilisateurs) {
     [PSCustomObject]$ligne
 }
 
-# ---- EXCEL VIA COM ----
+# ============================================================
+# CROISEMENT : qui est dans AD mais PAS dans les actifs ?
+# qui est dans les actifs mais PAS dans AD ?
+# ============================================================
+$samsAD      = $matrice | ForEach-Object { $_.Utilisateur.ToLower() }
+
+# Dans AD mais absent des actifs => à supprimer
+$aSupprimer  = $matrice | Where-Object { $listeActifs -notcontains $_.Utilisateur.ToLower() }
+
+# Dans les actifs mais absent de l'AD => à ajouter
+$aAjouter    = $listeActifs | Where-Object { $samsAD -notcontains $_ }
+
+Write-Host "À supprimer des groupes : $($aSupprimer.Count)" -ForegroundColor Red
+Write-Host "À ajouter dans les groupes : $($aAjouter.Count)" -ForegroundColor Yellow
+
+# ============================================================
+# EXCEL - ÉCRITURE
+# ============================================================
 $excel = New-Object -ComObject Excel.Application
 $excel.Visible = $false
 $wb = $excel.Workbooks.Add()
+
+# ========================
+# ONGLET 1 - MATRICE PRINCIPALE
+# ========================
 $ws = $wb.Worksheets.Item(1)
 $ws.Name = "Matrice Droits"
 
 $colonnes = $matrice[0].PSObject.Properties.Name
 
-# ---- EN-TÊTE ----
-for ($col = 0; $col -lt $colonnes.Count; $col++) {
-    $cell = $ws.Cells.Item(1, $col + 1)
-    $cell.Value2 = $colonnes[$col]
-    $cell.Font.Bold = $true
-    $cell.Font.Size = 8
-
-    if ($col -eq 0) {
-        $cell.Interior.Color = Get-ExcelColor 68 114 196
-        $cell.Font.Color = 0xFFFFFF
-        $cell.VerticalAlignment = -4107
-    } else {
-        # Couleur cyclique sur 5
-        $cell.Interior.Color = $palette[($col - 1) % 5]
-        $cell.Font.Color = Get-ExcelColor 0 0 0
-        $cell.Orientation = 90
-        $cell.VerticalAlignment = -4107
-        $cell.HorizontalAlignment = -4108
-    }
-}
-
-$ws.Rows.Item(1).RowHeight = 130
-
-# ---- DONNÉES ----
-for ($lig = 0; $lig -lt $matrice.Count; $lig++) {
-    $ligne = $matrice[$lig]
-    $excelLig = $lig + 2
-
-    for ($col = 0; $col -lt $colonnes.Count; $col++) {
-        $cell = $ws.Cells.Item($excelLig, $col + 1)
-        $valeur = $ligne.($colonnes[$col])
-        $cell.Value2 = $valeur
-        $cell.Font.Size = 8
-        $cell.Borders.LineStyle = 1
-        $cell.Borders.Weight = 1
-
-        if ($col -eq 0) {
-            $cell.Font.Bold = $false
-            if ($excelLig % 2 -eq 0) {
-                $cell.Interior.Color = Get-ExcelColor 210 210 210
-            } else {
-                $cell.Interior.Color = Get-ExcelColor 242 242 242
-            }
-        } elseif ($valeur -eq "+") {
-            $cell.Interior.Color = Get-ExcelColor 100 100 100  # Gris foncé
-            $cell.Font.Color = 0xFFFFFF
-            $cell.HorizontalAlignment = -4108
-            $cell.Font.Bold = $true
-        } else {
-            if ($excelLig % 2 -eq 0) {
-                $cell.Interior.Color = Get-ExcelColor 210 210 210
-            } else {
-                $cell.Interior.Color = Get-ExcelColor 242 242 242
-            }
-        }
-    }
-
-    $ws.Rows.Item($excelLig).RowHeight = 15
-}
-
-# ---- FIGER VOLETS ----
-$ws.Cells.Item(2, 2).Select()
-$excel.ActiveWindow.FreezePanes = $true
-
-# ---- LARGEUR COLONNES ----
-$ws.Columns.Item(1).ColumnWidth = 20
-for ($col = 2; $col -le $colonnes.Count; $col++) {
-    $ws.Columns.Item($col).ColumnWidth = 4
-}
-
-# ---- SAUVEGARDE ----
-$fichier = "C:\matrice_droits.xlsx"
-$wb.SaveAs($fichier)
-$wb.Close()
-$excel.Quit()
-[System.Runtime.InteropServices.Marshal]::ReleaseComObject($excel) | Out-Null
-
-Write-Host "Export terminé : $fichier" -ForegroundColor Green
-```
-
-**Changements clés :**
-
-| Élément | Style |
-|---|---|
-| En-têtes | 5 couleurs qui **se répètent cycliquement** avec `% 5` |
-| Lignes paires | Gris moyen `210 210 210` |
-| Lignes impaires | Gris très clair `242 242 242` |
-| Marqueur `+` | Gris foncé avec texte blanc |
-
-
-
-
-```powershell
-function Get-ExcelColor($r, $g, $b) {
-    return $r + ($g * 256) + ($b * 65536)
-}
-
-# Panel de 5 couleurs FONCÉES qui se répètent
-$palette = @(
-    (Get-ExcelColor 31  78  121),  # Bleu foncé
-    (Get-ExcelColor 56  118  29),  # Vert foncé
-    (Get-ExcelColor 153 115   0),  # Jaune/Or foncé
-    (Get-ExcelColor 139  0    0),  # Rouge foncé
-    (Get-ExcelColor 102  0  153)   # Violet foncé
-)
-
-# Récupération des groupes
-$groupes = Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} | Sort-Object Name
-
-# Récupération des utilisateurs
-$utilisateurs = $groupes | ForEach-Object {
-    Get-ADGroupMember -Identity $_ -Recursive | Where-Object { $_.objectClass -eq "user" }
-} | Sort-Object SamAccountName | Select-Object -Unique -Property Name, SamAccountName
-
-# Construction de la matrice
-$matrice = foreach ($user in $utilisateurs) {
-    $userAD = Get-ADUser $user.SamAccountName -Properties MemberOf, DisplayName
-    $groupesUser = $userAD.MemberOf | ForEach-Object { (Get-ADGroup $_).Name }
-    $ligne = [ordered]@{ "Utilisateur" = $userAD.SamAccountName }
-    foreach ($groupe in $groupes) {
-        $ligne[$groupe.Name] = if ($groupesUser -contains $groupe.Name) { "+" } else { "" }
-    }
-    [PSCustomObject]$ligne
-}
-
-# ---- EXCEL VIA COM ----
-$excel = New-Object -ComObject Excel.Application
-$excel.Visible = $false
-$wb = $excel.Workbooks.Add()
-$ws = $wb.Worksheets.Item(1)
-$ws.Name = "Matrice Droits"
-
-$colonnes = $matrice[0].PSObject.Properties.Name
-
-# ---- EN-TÊTE ----
+# En-tête
 for ($col = 0; $col -lt $colonnes.Count; $col++) {
     $cell = $ws.Cells.Item(1, $col + 1)
     $cell.Value2 = $colonnes[$col]
@@ -1194,84 +94,157 @@ for ($col = 0; $col -lt $colonnes.Count; $col++) {
     $cell.Font.Size = 7
 
     if ($col -eq 0) {
-        $cell.Interior.Color = Get-ExcelColor 30 30 30
-        $cell.Font.Color = 0xFFFFFF
+        $cell.Interior.Color = Get-ExcelColor 255 255 255
+        $cell.Font.Color = 0x000000
         $cell.VerticalAlignment = -4107
     } else {
         $cell.Interior.Color = $palette[($col - 1) % 5]
-        $cell.Font.Color = 0xFFFFFF      # Texte blanc sur fond foncé
+        $cell.Font.Color = 0x000000
         $cell.Orientation = 90
         $cell.VerticalAlignment = -4107
         $cell.HorizontalAlignment = -4108
     }
 }
-
-# Hauteur ligne en-tête réduite au minimum viable avec rotation
 $ws.Rows.Item(1).RowHeight = 100
 
-# ---- DONNÉES ----
+# Données
 for ($lig = 0; $lig -lt $matrice.Count; $lig++) {
     $ligne = $matrice[$lig]
     $excelLig = $lig + 2
+    $estASupprimer = $listeActifs -notcontains $ligne.Utilisateur.ToLower()
 
     for ($col = 0; $col -lt $colonnes.Count; $col++) {
         $cell = $ws.Cells.Item($excelLig, $col + 1)
         $valeur = $ligne.($colonnes[$col])
         $cell.Value2 = $valeur
         $cell.Font.Size = 7
-        $cell.Borders.LineStyle = 1
-        $cell.Borders.Weight = 1
+
+        foreach ($edge in @(7, 8, 9, 10)) {
+            $cell.Borders.Item($edge).LineStyle = 1
+            $cell.Borders.Item($edge).Weight = 2
+            $cell.Borders.Item($edge).Color = 0x000000
+        }
 
         if ($col -eq 0) {
-            if ($excelLig % 2 -eq 0) {
+            # Colonne nom : rouge si à supprimer, sinon alternance gris
+            if ($estASupprimer) {
+                $cell.Interior.Color = Get-ExcelColor 255 180 180
+            } elseif ($excelLig % 2 -eq 0) {
                 $cell.Interior.Color = Get-ExcelColor 200 200 200
             } else {
                 $cell.Interior.Color = Get-ExcelColor 235 235 235
             }
         } elseif ($valeur -eq "+") {
-            $cell.Interior.Color = Get-ExcelColor 80 80 80
+            if ($estASupprimer) {
+                $cell.Interior.Color = Get-ExcelColor 200 80 80   # Rouge foncé si à supprimer
+            } else {
+                $cell.Interior.Color = Get-ExcelColor 80 80 80
+            }
             $cell.Font.Color = 0xFFFFFF
             $cell.HorizontalAlignment = -4108
             $cell.Font.Bold = $true
         } else {
-            if ($excelLig % 2 -eq 0) {
+            if ($estASupprimer) {
+                $cell.Interior.Color = Get-ExcelColor 255 200 200
+            } elseif ($excelLig % 2 -eq 0) {
                 $cell.Interior.Color = Get-ExcelColor 200 200 200
             } else {
                 $cell.Interior.Color = Get-ExcelColor 235 235 235
             }
         }
     }
-
-    # Hauteur de ligne minimale
     $ws.Rows.Item($excelLig).RowHeight = 11
 }
 
-# ---- FIGER VOLETS ----
+# Figer volets + largeurs
 $ws.Cells.Item(2, 2).Select()
 $excel.ActiveWindow.FreezePanes = $true
-
-# ---- LARGEUR COLONNES ----
-$ws.Columns.Item(1).ColumnWidth = 15  # Colonne utilisateur
+$ws.Columns.Item(1).ColumnWidth = 15
 for ($col = 2; $col -le $colonnes.Count; $col++) {
-    $ws.Columns.Item($col).ColumnWidth = 2.5  # Minimum lisible
+    $ws.Columns.Item($col).ColumnWidth = 2.5
 }
 
-# ---- SAUVEGARDE ----
-$fichier = "C:\matrice_droits.xlsx"
+# ========================
+# ONGLET 2 - À SUPPRIMER
+# ========================
+$wb.Worksheets.Add() | Out-Null
+$ws2 = $wb.Worksheets.Item(2)
+$ws2.Name = "A Supprimer"
+
+# En-tête onglet 2
+$ws2.Cells.Item(1,1).Value2 = "SamAccountName"
+$ws2.Cells.Item(1,2).Value2 = "Raison"
+$ws2.Cells.Item(1,1).Font.Bold = $true
+$ws2.Cells.Item(1,2).Font.Bold = $true
+$ws2.Cells.Item(1,1).Interior.Color = Get-ExcelColor 192 0 0
+$ws2.Cells.Item(1,2).Interior.Color = Get-ExcelColor 192 0 0
+$ws2.Cells.Item(1,1).Font.Color = 0xFFFFFF
+$ws2.Cells.Item(1,2).Font.Color = 0xFFFFFF
+
+$row2 = 2
+foreach ($u in $aSupprimer) {
+    $ws2.Cells.Item($row2, 1).Value2 = $u.Utilisateur
+    $ws2.Cells.Item($row2, 2).Value2 = "Présent dans AD/groupes mais absent de la liste des actifs"
+    $ws2.Cells.Item($row2, 1).Interior.Color = Get-ExcelColor 255 210 210
+    $ws2.Cells.Item($row2, 2).Interior.Color = Get-ExcelColor 255 230 230
+    foreach ($col in @(1,2)) {
+        foreach ($edge in @(7,8,9,10)) {
+            $ws2.Cells.Item($row2,$col).Borders.Item($edge).LineStyle = 1
+            $ws2.Cells.Item($row2,$col).Borders.Item($edge).Weight = 2
+            $ws2.Cells.Item($row2,$col).Borders.Item($edge).Color = 0x000000
+        }
+    }
+    $ws2.Rows.Item($row2).RowHeight = 11
+    $row2++
+}
+$ws2.Columns.Item(1).ColumnWidth = 25
+$ws2.Columns.Item(2).ColumnWidth = 55
+
+# ========================
+# ONGLET 3 - À AJOUTER
+# ========================
+$wb.Worksheets.Add() | Out-Null
+$ws3 = $wb.Worksheets.Item(3)
+$ws3.Name = "A Ajouter"
+
+$ws3.Cells.Item(1,1).Value2 = "SamAccountName"
+$ws3.Cells.Item(1,2).Value2 = "Raison"
+$ws3.Cells.Item(1,1).Font.Bold = $true
+$ws3.Cells.Item(1,2).Font.Bold = $true
+$ws3.Cells.Item(1,1).Interior.Color = Get-ExcelColor 0 112 0
+$ws3.Cells.Item(1,2).Interior.Color = Get-ExcelColor 0 112 0
+$ws3.Cells.Item(1,1).Font.Color = 0xFFFFFF
+$ws3.Cells.Item(1,2).Font.Color = 0xFFFFFF
+
+$row3 = 2
+foreach ($sam in $aAjouter) {
+    $ws3.Cells.Item($row3, 1).Value2 = $sam
+    $ws3.Cells.Item($row3, 2).Value2 = "Présent dans la liste des actifs mais absent des groupes AD"
+    $ws3.Cells.Item($row3, 1).Interior.Color = Get-ExcelColor 210 255 210
+    $ws3.Cells.Item($row3, 2).Interior.Color = Get-ExcelColor 230 255 230
+    foreach ($col in @(1,2)) {
+        foreach ($edge in @(7,8,9,10)) {
+            $ws3.Cells.Item($row3,$col).Borders.Item($edge).LineStyle = 1
+            $ws3.Cells.Item($row3,$col).Borders.Item($edge).Weight = 2
+            $ws3.Cells.Item($row3,$col).Borders.Item($edge).Color = 0x000000
+        }
+    }
+    $ws3.Rows.Item($row3).RowHeight = 11
+    $row3++
+}
+$ws3.Columns.Item(1).ColumnWidth = 25
+$ws3.Columns.Item(2).ColumnWidth = 55
+
+# ============================================================
+# SAUVEGARDE
+# ============================================================
+$fichier = "C:\Users\x\Downloads\matrice_droits.xlsx"
 $wb.SaveAs($fichier)
 $wb.Close()
 $excel.Quit()
 [System.Runtime.InteropServices.Marshal]::ReleaseComObject($excel) | Out-Null
 
 Write-Host "Export terminé : $fichier" -ForegroundColor Green
-```
-
-**Modifications :**
-
-| Élément | Valeur |
-|---|---|
-| Hauteur lignes données | `11` (minimum Excel) |
-| Largeur colonnes groupes | `2.5` (minimum lisible) |
-| Hauteur en-tête | `100` (réduit vs 130) |
-| Couleurs en-tête | Foncées + **texte blanc** |
-| Police | Taille `7` partout |
+Write-Host "  → Onglet 'Matrice Droits' : vue complète (lignes rouges = à supprimer)" -ForegroundColor White
+Write-Host "  → Onglet 'A Supprimer'    : $($aSupprimer.Count) comptes en trop" -ForegroundColor Red
+Write-Host "  → Onglet 'A Ajouter'      : $($aAjouter.Count) comptes
