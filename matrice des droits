@@ -248,3 +248,63 @@ Write-Host "Export terminé : $fichier" -ForegroundColor Green
 Write-Host "  → Onglet 'Matrice Droits' : vue complète (lignes rouges = à supprimer)" -ForegroundColor White
 Write-Host "  → Onglet 'A Supprimer'    : $($aSupprimer.Count) comptes en trop" -ForegroundColor Red
 Write-Host "  → Onglet 'A Ajouter'      : $($aAjouter.Count) comptes
+
+
+
+
+
+
+
+
+Modifie uniquement la partie lecture du fichier Excel des actifs :
+
+```powershell
+# ============================================================
+# LECTURE DU FICHIER EXCEL DES ACTIFS
+# Colonne A = Nom, Colonne B = Prénom
+# ============================================================
+$fichierActifs = "C:\Users\x\Downloads\actifs.xlsx"
+
+$excelLecture = New-Object -ComObject Excel.Application
+$excelLecture.Visible = $false
+$wbActifs = $excelLecture.Workbooks.Open($fichierActifs)
+$wsActifs = $wbActifs.Worksheets.Item(1)
+
+$ligneMax = $wsActifs.UsedRange.Rows.Count
+$listeActifs = @()
+
+for ($i = 2; $i -le $ligneMax; $i++) {
+    $nom    = $wsActifs.Cells.Item($i, 1).Value2
+    $prenom = $wsActifs.Cells.Item($i, 2).Value2
+
+    if ($nom -and $prenom) {
+        # Reconstruit le SamAccountName format : première lettre prénom + nom
+        # Ex: Jean Dupont => jdupont
+        $sam = ($prenom.Substring(0,1) + $nom).ToLower().Trim()
+        $sam = $sam -replace '[éèêë]','e' -replace '[àâä]','a' -replace '[ùûü]','u' `
+                    -replace '[îï]','i'   -replace '[ôö]','o'  -replace '[ç]','c' `
+                    -replace '[^a-z0-9]',''
+        $listeActifs += $sam
+    }
+}
+
+$wbActifs.Close($false)
+$excelLecture.Quit()
+[System.Runtime.InteropServices.Marshal]::ReleaseComObject($excelLecture) | Out-Null
+
+Write-Host "Actifs chargés : $($listeActifs.Count) personnes" -ForegroundColor Cyan
+```
+
+---
+
+> ⚠️ **Important** : la reconstitution du SamAccountName dépend de la convention de nommage de ton AD.
+
+Les formats les plus courants :
+
+| Convention | Exemple | Code à adapter |
+|---|---|---|
+| `1ère lettre prénom + nom` | `jdupont` | ✅ déjà dans le script |
+| `prénom.nom` | `jean.dupont` | `$prenom + "." + $nom` |
+| `nom + 1ère lettre prénom` | `dupontj` | `$nom + $prenom.Substring(0,1)` |
+
+**Dis-moi quel format utilise ton AD** et j'adapterai la ligne `$sam = ...` en conséquence.
