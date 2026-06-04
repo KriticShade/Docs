@@ -354,3 +354,119 @@ $Workbook.SaveAs($chemin)
 $Excel.Quit()
 
 Write-Host "Fichier sauvegardé : $chemin" -ForegroundColor Green
+
+
+
+
+
+
+
+
+
+$GroupesDFS = Get-ADGroup -Filter {Name -like "GG_BDX_BNU_CDAD*" -and Description -like "*Groupe Global DFS*"} -Properties Description | 
+    Select-Object Name | Sort-Object Name
+
+$tousLesFonctionnels = @{}
+$relationsDFS = @{}
+
+foreach ($dfs in $GroupesDFS) {
+    $membres = Get-ADGroupMember -Identity $dfs.Name | Where-Object {$_.ObjectClass -eq "group"}
+    foreach ($m in $membres) {
+        $tousLesFonctionnels[$m.Name] = $true
+    }
+    $relationsDFS[$dfs.Name] = $membres | Select-Object -ExpandProperty Name
+}
+
+$fonctionnels = $tousLesFonctionnels.Keys | Sort-Object
+$dfsList = $GroupesDFS.Name
+
+# Créer Excel
+$Excel = New-Object -ComObject Excel.Application
+$Excel.Visible = $false
+$Workbook = $Excel.Workbooks.Add()
+$Sheet = $Workbook.Sheets.Item(1)
+$Sheet.Name = "Matrice DFS"
+
+# Couleurs en-têtes fonctionnels (colonnes) en nuances
+$couleursFonctionnels = @(
+    [long](183 * 65536 + 222 * 256 + 232),  # Bleu
+    [long](216 * 65536 + 228 * 256 + 188),  # Vert
+    [long](252 * 65536 + 213 * 256 + 180),  # Orange
+    [long](230 * 65536 + 184 * 256 + 183),  # Rose
+    [long](204 * 65536 + 192 * 256 + 218)   # Violet
+)
+
+# Couleurs gris alternés pour colonne gauche (DFS)
+$couleursDFS = @(
+    [long](242 * 65536 + 242 * 256 + 242),  # Gris très clair
+    [long](255 * 65536 + 255 * 256 + 255)   # Blanc
+)
+
+# En-têtes fonctionnels en ligne 1 (à partir de colonne 2)
+$col = 2
+$colorIndex = 0
+foreach ($f in $fonctionnels) {
+    $cell = $Sheet.Cells.Item(1, $col)
+    $cell.Value2 = $f
+    $cell.Font.Bold = $true
+    $cell.Font.Size = 10
+    $cell.Interior.Color = $couleursFonctionnels[$colorIndex % $couleursFonctionnels.Count]
+    $cell.Orientation = 90
+    $cell.HorizontalAlignment = -4108  # Center
+    $col++
+    $colorIndex++
+}
+
+# Groupes DFS en colonne 1 + remplissage matrice
+$row = 2
+$dfsIndex = 0
+foreach ($dfs in $dfsList) {
+    # Cellule DFS colonne gauche
+    $cell = $Sheet.Cells.Item($row, 1)
+    $cell.Value2 = $dfs
+    $cell.Font.Bold = $true
+    $cell.Font.Size = 10
+    $cell.Interior.Color = $couleursDFS[$dfsIndex % 2]
+
+    # Remplir matrice
+    $col = 2
+    foreach ($f in $fonctionnels) {
+        if ($relationsDFS[$dfs] -contains $f) {
+            $cellMatrice = $Sheet.Cells.Item($row, $col)
+            if ($dfs -like "*_RW") {
+                $cellMatrice.Value2 = "RW"
+                $cellMatrice.Interior.Color = [long](169 * 65536 + 208 * 256 + 142)  # Vert doux
+            } elseif ($dfs -like "*_R") {
+                $cellMatrice.Value2 = "R"
+                $cellMatrice.Interior.Color = [long](255 * 65536 + 230 * 256 + 153)  # Jaune doux
+            }
+            $cellMatrice.Font.Bold = $true
+            $cellMatrice.Font.Size = 10
+            $cellMatrice.HorizontalAlignment = -4108  # Center
+        }
+        $col++
+    }
+    $row++
+    $dfsIndex++
+}
+
+# En-tête cellule origine (A1)
+$Sheet.Cells.Item(1, 1).Value2 = "DFS \ Fonctionnels"
+$Sheet.Cells.Item(1, 1).Font.Bold = $true
+$Sheet.Cells.Item(1, 1).Font.Size = 10
+$Sheet.Cells.Item(1, 1).Interior.Color = [long](166 * 65536 + 166 * 256 + 166)
+
+# AutoFit toutes les colonnes et lignes
+$Sheet.UsedRange.Columns.AutoFit() | Out-Null
+$Sheet.UsedRange.Rows.AutoFit() | Out-Null
+
+# Figer première ligne et colonne
+$Sheet.Application.ActiveWindow.SplitRow = 1
+$Sheet.Application.ActiveWindow.SplitColumn = 1
+$Sheet.Application.ActiveWindow.FreezePanes = $true
+
+$chemin = "$env:USERPROFILE\Desktop\Matrice_DFS_Fonctionnels.xlsx"
+$Workbook.SaveAs($chemin)
+$Excel.Quit()
+
+Write-Host "Fichier sauvegardé : $chemin" -ForegroundColor Green
