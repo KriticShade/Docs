@@ -1,8 +1,0 @@
-# Remplacez "nom.prenom" par le vrai username
-$utilisateur = "nom.prenom"
-
-# Lister tous les groupes
-Get-ADPrincipalGroupMembership -Identity $utilisateur | 
-    Select-Object Name, GroupScope, GroupCategory | 
-    Sort-Object Name | 
-    Format-Table -AutoSize
