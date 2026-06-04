@@ -232,3 +232,45 @@ foreach ($dfs in $GroupesDFS | Select-Object -First 20) {
 }
 
 
+
+
+
+
+$GroupesDFS = Get-ADGroup -Filter {Name -like "GG_BDX_BNU_CDAD*" -and Description -like "*Groupe Global DFS*"} -Properties Description | 
+    Select-Object Name | Sort-Object Name
+
+# Récupérer tous les groupes fonctionnels uniques
+$tousLesFonctionnels = @{}
+$relationsDFS = @{}
+
+foreach ($dfs in $GroupesDFS) {
+    $membres = Get-ADGroupMember -Identity $dfs.Name | Where-Object {$_.ObjectClass -eq "group"}
+    foreach ($m in $membres) {
+        $tousLesFonctionnels[$m.Name] = $true
+    }
+    $relationsDFS[$dfs.Name] = $membres | Select-Object -ExpandProperty Name
+}
+
+$fonctionnels = $tousLesFonctionnels.Keys | Sort-Object
+$dfsList = $GroupesDFS.Name
+
+# Construire la matrice
+$matrice = @()
+foreach ($f in $fonctionnels) {
+    $ligne = [ordered]@{ "Groupe Fonctionnel" = $f }
+    foreach ($dfs in $dfsList) {
+        if ($relationsDFS[$dfs] -contains $f) {
+            if ($dfs -like "*_RW") { $ligne[$dfs] = "RW" }
+            elseif ($dfs -like "*_R") { $ligne[$dfs] = "R" }
+            else { $ligne[$dfs] = "X" }
+        } else {
+            $ligne[$dfs] = ""
+        }
+    }
+    $matrice += [PSCustomObject]$ligne
+}
+
+$matrice | Format-Table -AutoSize
+
+
+
