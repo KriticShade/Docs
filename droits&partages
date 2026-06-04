@@ -13,11 +13,14 @@ $Matrice = @{}
 foreach ($DFS in $GroupesDFS) {
     $Matrice[$DFS] = @{}
     
-    # Récupérer les membres du groupe DFS
-    $Membres = Get-ADGroupMember -Identity $DFS | Select-Object -ExpandProperty Name
+    # Récupérer les membres avec SamAccountName
+    $Membres = Get-ADGroupMember -Identity $DFS | Select-Object -ExpandProperty SamAccountName
     
     foreach ($Fonctionnel in $GroupesFonctionnels) {
-        if ($Membres -contains $Fonctionnel) {
+        # Récupérer le SamAccountName du groupe fonctionnel
+        $FonctionnelSam = (Get-ADGroup -Identity $Fonctionnel).SamAccountName
+        
+        if ($Membres -contains $FonctionnelSam) {
             if ($DFS -like "*-RW") {
                 $Matrice[$DFS][$Fonctionnel] = "W"
             } elseif ($DFS -like "*-R") {
