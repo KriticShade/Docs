@@ -127,3 +127,114 @@ Write-Host "✅ Export Excel terminé : $outputExcel" -ForegroundColor Green
 > 2. **Vérifier les suffixes** de permission exacts dans ton AD
 > 3. **Droits AD** : nécessite un compte avec lecture sur l'AD
 > 4. Le module `ImportExcel` : `Install-Module ImportExcel -Scope CurrentUser`
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Script sans module externe - Export CSV
+
+```powershell
+Import-Module ActiveDirectory
+
+# ============================================================
+# PARAMETRES A ADAPTER
+# ============================================================
+$prefixeGroupe = "GG_F_CDAD-BDX"
+$outputCSV     = "C:\Temp\Matrice_Droits_AD.csv"
+
+# Adapter avec ton OU
+$utilisateurs = Get-ADUser -Filter * -SearchBase "OU=Utilisateurs,DC=tondomaine,DC=local" `
+                -Properties MemberOf, DisplayName, SamAccountName
+
+# ============================================================
+# COLLECTE DES DONNEES
+# ============================================================
+$resultat = @()
+
+foreach ($user in $utilisateurs) {
+
+    $groupesFonctionnels = $user.MemberOf | ForEach-Object {
+        Get-ADGroup $_ -Properties MemberOf
+    } | Where-Object { $_.Name -like "$prefixeGroupe*" }
+
+    if (-not $groupesFonctionnels) {
+        $resultat += [PSCustomObject]@{
+            Utilisateur       = $user.DisplayName
+            SamAccountName    = $user.SamAccountName
+            GroupeFonctionnel = "Aucun groupe correspondant"
+            GroupePermission  = ""
+            Permission        = ""
+        }
+        continue
+    }
+
+    foreach ($groupe in $groupesFonctionnels) {
+
+        $groupesPermission = $groupe.MemberOf | ForEach-Object {
+            Get-ADGroup $_ -Properties Name
+        }
+
+        if (-not $groupesPermission) {
+            $resultat += [PSCustomObject]@{
+                Utilisateur       = $user.DisplayName
+                SamAccountName    = $user.SamAccountName
+                GroupeFonctionnel = $groupe.Name
+                GroupePermission  = "Aucun groupe de permission trouvé"
+                Permission        = "?"
+            }
+            continue
+        }
+
+        foreach ($gp in $groupesPermission) {
+
+            $permission = "Inconnue"
+            if ($gp.Name -match "_(RW|R|RO|Modify|FullControl|FC|M|WRITE|READ)$") {
+                $permission = $matches[1]
+            }
+
+            $resultat += [PSCustomObject]@{
+                Utilisateur       = $user.DisplayName
+                SamAccountName    = $user.SamAccountName
+                GroupeFonctionnel = $groupe.Name
+                GroupePermission  = $gp.Name
+                Permission        = $permission
+            }
+        }
+    }
+}
+
+# ============================================================
+# EXPORT CSV
+# ============================================================
+$resultat | Export-Csv -Path $outputCSV -NoTypeInformation -Encoding UTF8 -Delimiter ";"
+
+Write-Host "Export termine : $outputCSV" -ForegroundColor Green
+```
+
+---
+
+## Ouvrir proprement dans Excel ensuite
+
+> 1. Ouvrir Excel **fichier vide**
+> 2. Onglet **Données** > **À partir du texte/CSV**
+> 3. Sélectionner ton fichier
+> 4. Délimiteur : **point-virgule**
+> 5. ✅ Tout s'aligne bien dans les colonnes
+
+---
+
+## Si tu veux juste un affichage console rapide sans fichier
+
+```powershell
+$resultat | Format-Table -AutoSize
+```
