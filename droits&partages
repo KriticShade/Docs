@@ -625,3 +625,250 @@ $Workbook.SaveAs($chemin)
 $Excel.Quit()
 
 Write-Host "Fichier sauvegardé : $chemin" -ForegroundColor Green
+
+
+
+
+
+
+
+
+
+
+# ============================================================
+# MATRICE CROISÉE : Utilisateurs x Groupes DFS (via Fonctionnels)
+# ============================================================
+
+# Récupérer groupes DFS
+$GroupesDFS = Get-ADGroup -Filter {Name -like "GG_BDX_BNU_CDAD*"} -Properties Members | Sort-Object Name
+
+# Récupérer groupes Fonctionnels
+$GroupesFonctionnels = Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} -Properties Members | Sort-Object Name
+
+# Construire relation DFS -> Fonctionnels membres
+$relationsDFS = @{}
+foreach ($dfs in $GroupesDFS) {
+    $membres = Get-ADGroupMember -Identity $dfs.Name | Where-Object {$_.ObjectClass -eq "group" -and $_.Name -like "GG_F_CDAD-BDX*"}
+    $relationsDFS[$dfs.Name] = $membres | Select-Object -ExpandProperty Name
+}
+
+# Construire relation Fonctionnel -> Utilisateurs membres
+$relationsFont = @{}
+foreach ($f in $GroupesFonctionnels) {
+    $membres = Get-ADGroupMember -Identity $f.Name -Recursive | Where-Object {$_.ObjectClass -eq "user"}
+    $relationsFont[$f.Name] = $membres | Select-Object -ExpandProperty SamAccountName
+}
+
+# Construire liste de tous les utilisateurs
+$tousLesUsers = @{}
+foreach ($f in $GroupesFonctionnels) {
+    if ($relationsFont[$f.Name]) {
+        foreach ($u in $relationsFont[$f.Name]) {
+            $tousLesUsers[$u] = $true
+        }
+    }
+}
+$usersList = $tousLesUsers.Keys | Sort-Object
+$dfsList   = $GroupesDFS.Name
+
+# ============================================================
+# CRÉATION EXCEL
+# ============================================================
+$Excel    = New-Object -ComObject Excel.Application
+$Excel.Visible = $false
+$Workbook = $Excel.Workbooks.Add()
+
+# --- FEUILLE 1 : Matrice Utilisateurs x DFS ---
+$Sheet1 = $Workbook.Sheets.Item(1)
+$Sheet1.Name = "Droits Utilisateurs"
+
+$couleurs = @(
+    [long](183 * 65536 + 222 * 256 + 232),
+    [long](216 * 65536 + 228 * 256 + 188),
+    [long](252 * 65536 + 213 * 256 + 180),
+    [long](230 * 65536 + 184 * 256 + 183),
+    [long](204 * 65536 + 192 * 256 + 218)
+)
+$couleurRW  = [long](64  * 65536 + 64  * 256 + 64)
+$couleurR   = [long](110 * 65536 + 110 * 256 + 110)
+$blanc      = [long](255 * 65536 + 255 * 256 + 255)
+
+# Cellule A1
+$Sheet1.Cells.Item(1,1).Value2 = "Utilisateur \ DFS"
+$Sheet1.Cells.Item(1,1).Font.Bold = $true
+$Sheet1.Cells.Item(1,1).Font.Size = 10
+$Sheet1.Cells.Item(1,1).Interior.Color = [long](64 * 65536 + 64 * 256 + 64)
+$Sheet1.Cells.Item(1,1).Font.Color = $blanc
+
+# En-têtes DFS en ligne 1 (verticaux + couleurs)
+$col = 2
+$colorIndex = 0
+foreach ($dfs in $dfsList) {
+    $cell = $Sheet1.Cells.Item(1, $col)
+    $cell.Value2 = $dfs
+    $cell.Font.Bold = $true
+    $cell.Font.Size = 10
+    $cell.Interior.Color = $couleurs[$colorIndex % $couleurs.Count]
+    $cell.Orientation = 90
+    $cell.HorizontalAlignment = -4108
+    $cell.VerticalAlignment   = -4107
+    $col++
+    $colorIndex++
+}
+
+# Lignes utilisateurs
+$row = 2
+$userIndex = 0
+foreach ($user in $usersList) {
+    # Couleur alternée colonne A
+    $couleurLigne = if ($userIndex % 2 -eq 0) {
+        [long](242 * 65536 + 242 * 256 + 242)
+    } else { $blanc }
+
+    $Sheet1.Cells.Item($row, 1).Value2 = $user
+    $Sheet1.Cells.Item($row, 1).Font.Bold = $true
+    $Sheet1.Cells.Item($row, 1).Font.Size = 10
+    $Sheet1.Cells.Item($row, 1).Interior.Color = $couleurLigne
+
+    # Pour chaque DFS, vérifier si l'utilisateur a des droits via un fonctionnel
+    $col = 2
+    foreach ($dfs in $dfsList) {
+        $droitMax = ""
+        foreach ($f in $relationsDFS[$dfs]) {
+            if ($relationsFont[$f] -contains $user) {
+                if ($dfs -like "*_RW") { $droitMax = "RW" ; break }
+                elseif ($dfs -like "*_R" -and $droitMax -ne "RW") { $droitMax = "R" }
+            }
+        }
+
+        if ($droitMax -ne "") {
+            $cellM = $Sheet1.Cells.Item($row, $col)
+            $cellM.Value2 = $droitMax
+            $cellM.Font.Bold = $true
+            $cellM.Font.Size = 10
+            $cellM.Font.Color = $blanc
+            $cellM.HorizontalAlignment = -4108
+            $cellM.Interior.Color = if ($droitMax -eq "RW") { $couleurRW } else { $couleurR }
+        }
+        $col++
+    }
+
+    # Bordures ligne
+    $rangeLigne = $Sheet1.Range($Sheet1.Cells.Item($row,1), $Sheet1.Cells.Item($row, $dfsList.Count+1))
+    $rangeLigne.Borders.LineStyle = 1
+    $rangeLigne.Borders.Weight = 1
+
+    $row++
+    $userIndex++
+}
+
+# Hauteur ligne en-tête
+$Sheet1.Rows.Item(1).RowHeight = 120
+
+# AutoFit colonne A
+$Sheet1.Columns.Item(1).AutoFit() | Out-Null
+
+# Largeur minimale colonnes DFS
+for ($c = 2; $c -le ($dfsList.Count + 1); $c++) {
+    $Sheet1.Columns.Item($c).ColumnWidth = 3
+}
+
+# Hauteur lignes données
+for ($r = 2; $r -le ($usersList.Count + 1); $r++) {
+    $Sheet1.Rows.Item($r).RowHeight = 15
+}
+
+# Figer
+$Sheet1.Application.ActiveWindow.SplitRow = 1
+$Sheet1.Application.ActiveWindow.SplitColumn = 1
+$Sheet1.Application.ActiveWindow.FreezePanes = $true
+
+# ============================================================
+# FEUILLE 2 : Matrice DFS x Fonctionnels (ancienne matrice)
+# ============================================================
+$Sheet2 = $Workbook.Workbook.Sheets.Add()
+$Sheet2.Name = "Matrice DFS Fonctionnels"
+
+$fonctionnels = $GroupesFonctionnels.Name
+
+$Sheet2.Cells.Item(1,1).Value2 = "DFS \ Fonctionnels"
+$Sheet2.Cells.Item(1,1).Font.Bold = $true
+$Sheet2.Cells.Item(1,1).Font.Size = 10
+$Sheet2.Cells.Item(1,1).Interior.Color = [long](64 * 65536 + 64 * 256 + 64)
+$Sheet2.Cells.Item(1,1).Font.Color = $blanc
+
+$col = 2
+$colorIndex = 0
+foreach ($f in $fonctionnels) {
+    $cell = $Sheet2.Cells.Item(1, $col)
+    $cell.Value2 = $f
+    $cell.Font.Bold = $true
+    $cell.Font.Size = 10
+    $cell.Interior.Color = $couleurs[$colorIndex % $couleurs.Count]
+    $cell.Orientation = 90
+    $cell.HorizontalAlignment = -4108
+    $cell.VerticalAlignment   = -4107
+    $col++
+    $colorIndex++
+}
+
+$row = 2
+$dfsIndex = 0
+foreach ($dfs in $dfsList) {
+    $couleurLigne = if ($dfsIndex % 2 -eq 0) {
+        [long](242 * 65536 + 242 * 256 + 242)
+    } else { $blanc }
+
+    $Sheet2.Cells.Item($row,1).Value2 = $dfs
+    $Sheet2.Cells.Item($row,1).Font.Bold = $true
+    $Sheet2.Cells.Item($row,1).Font.Size = 10
+    $Sheet2.Cells.Item($row,1).Interior.Color = $couleurLigne
+
+    $col = 2
+    foreach ($f in $fonctionnels) {
+        if ($relationsDFS[$dfs] -contains $f) {
+            $cellM = $Sheet2.Cells.Item($row, $col)
+            if ($dfs -like "*_RW") {
+                $cellM.Value2 = "RW"
+                $cellM.Interior.Color = $couleurRW
+            } elseif ($dfs -like "*_R") {
+                $cellM.Value2 = "R"
+                $cellM.Interior.Color = $couleurR
+            }
+            $cellM.Font.Bold = $true
+            $cellM.Font.Size = 10
+            $cellM.Font.Color = $blanc
+            $cellM.HorizontalAlignment = -4108
+        }
+        $col++
+    }
+
+    $rangeLigne = $Sheet2.Range($Sheet2.Cells.Item($row,1), $Sheet2.Cells.Item($row, $fonctionnels.Count+1))
+    $rangeLigne.Borders.LineStyle = 1
+    $rangeLigne.Borders.Weight = 1
+
+    $row++
+    $dfsIndex++
+}
+
+$Sheet2.Rows.Item(1).RowHeight = 120
+$Sheet2.Columns.Item(1).AutoFit() | Out-Null
+for ($c = 2; $c -le ($fonctionnels.Count + 1); $c++) {
+    $Sheet2.Columns.Item($c).ColumnWidth = 3
+}
+for ($r = 2; $r -le ($dfsList.Count + 1); $r++) {
+    $Sheet2.Rows.Item($r).RowHeight = 15
+}
+
+$Sheet2.Application.ActiveWindow.SplitRow = 1
+$Sheet2.Application.ActiveWindow.SplitColumn = 1
+$Sheet2.Application.ActiveWindow.FreezePanes = $true
+
+# ============================================================
+# SAUVEGARDE
+# ============================================================
+$chemin = "$env:USERPROFILE\Desktop\Matrice_Complete.xlsx"
+$Workbook.SaveAs($chemin)
+$Excel.Quit()
+
+Write-Host "Fichier sauvegardé : $chemin" -ForegroundColor Green
