@@ -191,3 +191,19 @@ Write-Host "`n=== VERIFICATION MEMBRE ===" -ForegroundColor Cyan
 $MembresSam = $Membres | Select-Object -ExpandProperty SamAccountName
 Write-Host "SamAccountName membres : $MembresSam"
 Write-Host "Le FCT est membre ? : $($MembresSam -contains $FCTInfo.SamAccountName)"
+
+
+
+
+
+
+
+
+# Test inverse : le groupe fonctionnel contient-il des groupes DFS ?
+$PremierFCT = "GG_F_CDAD-BDX_ALL"
+Write-Host "=== MEMBRES DU GROUPE FONCTIONNEL ===" -ForegroundColor Cyan
+Get-ADGroupMember -Identity $PremierFCT | Select-Object Name, SamAccountName, ObjectClass | Format-Table -AutoSize
+
+Write-Host "`n=== GROUPES DONT GG_F_CDAD-BDX_ALL EST MEMBRE ===" -ForegroundColor Cyan
+Get-ADPrincipalGroupMembership -Identity $PremierFCT | Select-Object Name | Format-Table -AutoSize
+
