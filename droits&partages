@@ -1,408 +1,326 @@
-i Je fais une matrice des droits, chaque utilisateurs font partis d'un groupe fonctionnel commançant par le préfixe : 
-GG_F_CDAD-BDX
-Ces groupes sont membre d'autres groupes commençant par : 
-GG_BDX_BNU_CDAD et terminant par -R ou -RW par rapports aux permissions read and write. Peux tu me faire avec une commande powershell dans lequel je n'ai pas le droit d'installer de nouveau module mais j'ai droit au commande ad, de me lister pour une utilisateur les groupes dans lequel il fait parti et les droits qu'il pourrais avoir
-
-
-
-# Script PowerShell - Matrice des droits utilisateur AD
+# Script PowerShell - Matrice des droits DFS complète
 
 ```powershell
 # ============================================================
-# Script : Get-UserDFSRights.ps1
-# Description : Liste les groupes et droits DFS d'un utilisateur
+# Script : Get-DFSRightsMatrix.ps1
+# Description : Génère une matrice Excel des droits DFS
+# Prérequis   : Module ActiveDirectory uniquement
 # ============================================================
 
-param(
-    [Parameter(Mandatory=$true)]
-    [string]$UserName
-)
-
 # -------------------------------------------------------
-# 1. Récupération des groupes fonctionnels de l'utilisateur
-#    (groupes commençant par GG_F_CDAD-BDX)
+# 1. Récupération des groupes DFS (GG_BDX_BNU_CDAD*)
 # -------------------------------------------------------
 
-Write-Host "`n========================================" -ForegroundColor Cyan
-Write-Host " Analyse des droits pour : $UserName" -ForegroundColor Cyan
-Write-Host "========================================`n" -ForegroundColor Cyan
+Write-Host "`n[1/4] Récupération des groupes DFS..." -ForegroundColor Cyan
 
-# Récupère TOUS les groupes de l'utilisateur (récursif)
-$AllGroups = Get-ADPrincipalGroupMembership -Identity $UserName | Select-Object -ExpandProperty Name
+$DFSGroups = Get-ADGroup -Filter { Name -like "GG_BDX_BNU_CDAD*" } -Properties Members, MemberOf |
+             Sort-Object Name
 
-# Filtre les groupes fonctionnels
-$FunctionalGroups = $AllGroups | Where-Object { $_ -like "GG_F_CDAD-BDX*" }
+Write-Host "      $($DFSGroups.Count) groupes DFS trouvés." -ForegroundColor Green
 
-Write-Host "[ GROUPES FONCTIONNELS ]" -ForegroundColor Yellow
-Write-Host "---------------------------------------"
-if ($FunctionalGroups) {
-    $FunctionalGroups | ForEach-Object { Write-Host "  -> $_" -ForegroundColor White }
-} else {
-    Write-Host "  Aucun groupe fonctionnel trouve." -ForegroundColor Red
+# -------------------------------------------------------
+# 2. Récupération des groupes fonctionnels (GG_F_CDAD-BDX*)
+# -------------------------------------------------------
+
+Write-Host "[2/4] Récupération des groupes fonctionnels..." -ForegroundColor Cyan
+
+$FuncGroups = Get-ADGroup -Filter { Name -like "GG_F_CDAD-BDX*" } -Properties Members, MemberOf |
+              Sort-Object Name
+
+Write-Host "      $($FuncGroups.Count) groupes fonctionnels trouvés." -ForegroundColor Green
+
+# -------------------------------------------------------
+# 3. Construction de la matrice
+# -------------------------------------------------------
+
+Write-Host "[3/4] Construction de la matrice des droits..." -ForegroundColor Cyan
+
+# Table de correspondance : Groupe Fonctionnel -> Groupes DFS avec droits
+$MatrixData = @()
+
+foreach ($FuncGroup in $FuncGroups) {
+
+    # Récupère les groupes DFS parents du groupe fonctionnel
+    $ParentDFSGroups = Get-ADPrincipalGroupMembership -Identity $FuncGroup.DistinguishedName |
+                       Where-Object { $_.Name -like "GG_BDX_BNU_CDAD*" }
+
+    # Décompose le nom du groupe fonctionnel pour extraire les niveaux
+    # Format attendu : GG_F_CDAD-BDX_[NIVEAU1]_[NIVEAU2]_[NIVEAU3]...
+    $NameParts  = $FuncGroup.Name -replace "^GG_F_CDAD-BDX_?", "" -split "_"
+
+    $Row = [PSCustomObject]@{
+        Groupe_Fonctionnel = $FuncGroup.Name
+        Niveau_1           = if ($NameParts.Count -ge 1) { $NameParts[0] } else { "" }
+        Niveau_2           = if ($NameParts.Count -ge 2) { $NameParts[1] } else { "" }
+        Niveau_3           = if ($NameParts.Count -ge 3) { $NameParts[2] } else { "" }
+        Niveau_4           = if ($NameParts.Count -ge 4) { $NameParts[3] } else { "" }
+    }
+
+    # Pour chaque groupe DFS, on ajoute une colonne dynamique avec le droit
+    foreach ($DFSGroup in $DFSGroups) {
+        $Match = $ParentDFSGroups | Where-Object { $_.Name -eq $DFSGroup.Name }
+
+        $Right = if ($Match) {
+            switch -Wildcard ($DFSGroup.Name) {
+                "*-RW" { "RW" }
+                "*-R"  { "R"  }
+                default { "?"  }
+            }
+        } else { "" }
+
+        $Row | Add-Member -MemberType NoteProperty -Name $DFSGroup.Name -Value $Right
+    }
+
+    $MatrixData += $Row
 }
 
+Write-Host "      Matrice construite : $($MatrixData.Count) lignes." -ForegroundColor Green
+
 # -------------------------------------------------------
-# 2. Pour chaque groupe fonctionnel, on cherche les groupes
-#    DFS parents (GG_BDX_BNU_CDAD*) dont il est membre
+# 4. Export Excel via COM (sans module ImportExcel)
 # -------------------------------------------------------
 
-Write-Host "`n[ DROITS DFS ASSOCIES ]" -ForegroundColor Yellow
-Write-Host "---------------------------------------"
+Write-Host "[4/4] Génération du fichier Excel..." -ForegroundColor Cyan
 
-$RightsTable = @()
+$ExcelPath = ".\Matrice_Droits_DFS_$(Get-Date -Format 'yyyyMMdd_HHmmss').xlsx"
 
-foreach ($FuncGroup in $FunctionalGroups) {
-    
-    # Récupère les groupes parents du groupe fonctionnel
-    $ParentGroups = Get-ADPrincipalGroupMembership -Identity $FuncGroup | 
-                    Where-Object { $_.Name -like "GG_BDX_BNU_CDAD*" }
+# Création de l'objet Excel COM
+$Excel       = New-Object -ComObject Excel.Application
+$Excel.Visible = $false
+$Excel.DisplayAlerts = $false
 
-    foreach ($ParentGroup in $ParentGroups) {
-        
-        # Détermine le niveau de droit selon le suffixe
-        $Right = switch -Wildcard ($ParentGroup.Name) {
-            "*-RW"  { "Lecture / Ecriture (RW)" }
-            "*-R"   { "Lecture seule       (R) " }
-            default { "Droit inconnu           " }
-        }
+$Workbook  = $Excel.Workbooks.Add()
 
-        # Couleur selon le droit
-        $Color = if ($ParentGroup.Name -like "*-RW") { "Green" } else { "DarkYellow" }
+# -------------------------------------------------------
+# FEUILLE 1 : Matrice complète
+# -------------------------------------------------------
 
-        Write-Host "  [Groupe Fonctionnel] $FuncGroup" -ForegroundColor Gray
-        Write-Host "  [Groupe DFS]         $($ParentGroup.Name)" -ForegroundColor $Color
-        Write-Host "  [Droit]              $Right" -ForegroundColor $Color
-        Write-Host "  ---" 
+$Sheet1 = $Workbook.Worksheets.Item(1)
+$Sheet1.Name = "Matrice Droits"
 
-        # Alimente le tableau récapitulatif
-        $RightsTable += [PSCustomObject]@{
-            Utilisateur        = $UserName
-            Groupe_Fonctionnel = $FuncGroup
-            Groupe_DFS         = $ParentGroup.Name
-            Droit              = $Right
-        }
+# --- En-têtes ---
+$Headers = @("Groupe_Fonctionnel","Niveau_1","Niveau_2","Niveau_3","Niveau_4") + 
+           ($DFSGroups | Select-Object -ExpandProperty Name)
+
+for ($col = 0; $col -lt $Headers.Count; $col++) {
+    $Cell = $Sheet1.Cells.Item(1, $col + 1)
+    $Cell.Value2 = $Headers[$col]
+
+    # Style en-tête
+    $Cell.Font.Bold = $true
+    $Cell.Font.Color = [System.Drawing.ColorTranslator]::ToOle([System.Drawing.Color]::White)
+    $Cell.Interior.Color = [System.Drawing.ColorTranslator]::ToOle([System.Drawing.Color]::FromArgb(31,73,125))
+    $Cell.HorizontalAlignment = -4108  # xlCenter
+
+    # Rotation des en-têtes DFS pour lisibilité
+    if ($col -ge 5) {
+        $Cell.Orientation = 45
+        $Cell.RowHeight   = 100
     }
 }
 
+# --- Données ---
+$Row = 2
+foreach ($Entry in $MatrixData) {
+
+    $ColIndex = 1
+    foreach ($Header in $Headers) {
+        $Cell = $Sheet1.Cells.Item($Row, $ColIndex)
+        $Val  = $Entry.$Header
+
+        $Cell.Value2 = $Val
+
+        # Colorisation selon le droit
+        switch ($Val) {
+            "RW" {
+                $Cell.Interior.Color = [System.Drawing.ColorTranslator]::ToOle([System.Drawing.Color]::FromArgb(0,176,80))
+                $Cell.Font.Bold      = $true
+                $Cell.Font.Color     = [System.Drawing.ColorTranslator]::ToOle([System.Drawing.Color]::White)
+                $Cell.HorizontalAlignment = -4108
+            }
+            "R"  {
+                $Cell.Interior.Color = [System.Drawing.ColorTranslator]::ToOle([System.Drawing.Color]::FromArgb(255,192,0))
+                $Cell.Font.Bold      = $true
+                $Cell.HorizontalAlignment = -4108
+            }
+            default {
+                # Colorisation alternée des lignes
+                if ($Row % 2 -eq 0) {
+                    $Cell.Interior.Color = [System.Drawing.ColorTranslator]::ToOle([System.Drawing.Color]::FromArgb(242,242,242))
+                }
+            }
+        }
+
+        # Colorisation des colonnes Niveau_*
+        if ($Header -like "Niveau_*" -and $Val -ne "") {
+            $Cell.Font.Bold = $true
+        }
+
+        $ColIndex++
+    }
+
+    # Colorisation hiérarchique Niveau_1 (fond par groupe)
+    $Lvl1Cell = $Sheet1.Cells.Item($Row, 2)
+    $Lvl1Val  = $Entry.Niveau_1
+
+    $ColorMap = @{
+        # Adapter selon vos valeurs réelles de Niveau_1
+        "COMPTA"   = [System.Drawing.Color]::FromArgb(189,215,238)
+        "RH"       = [System.Drawing.Color]::FromArgb(226,239,218)
+        "DIRECTION"= [System.Drawing.Color]::FromArgb(255,235,156)
+        "TECHNIQUE" = [System.Drawing.Color]::FromArgb(255,204,153)
+    }
+
+    if ($ColorMap.ContainsKey($Lvl1Val)) {
+        $Sheet1.Cells.Item($Row, 1).Interior.Color = `
+            [System.Drawing.ColorTranslator]::ToOle($ColorMap[$Lvl1Val])
+        $Sheet1.Cells.Item($Row, 2).Interior.Color = `
+            [System.Drawing.ColorTranslator]::ToOle($ColorMap[$Lvl1Val])
+    }
+
+    $Row++
+}
+
+# --- Mise en forme finale ---
+$UsedRange = $Sheet1.UsedRange
+$UsedRange.Borders.LineStyle = 1
+$UsedRange.Borders.Weight    = 2
+
+# Figer les volets (ligne 1 + 5 premières colonnes)
+$Sheet1.Cells.Item(2, 6).Select() | Out-Null
+$Excel.ActiveWindow.FreezePanes = $true
+
+# Ajustement automatique des colonnes 1 à 5
+1..5 | ForEach-Object { $Sheet1.Columns.Item($_).AutoFit() | Out-Null }
+
+# Filtre automatique
+$Sheet1.Rows.Item(1).AutoFilter() | Out-Null
+
 # -------------------------------------------------------
-# 3. Tableau récapitulatif
+# FEUILLE 2 : Détail des membres par groupe DFS
 # -------------------------------------------------------
 
-Write-Host "`n[ RECAPITULATIF ]" -ForegroundColor Cyan
-Write-Host "---------------------------------------"
-if ($RightsTable) {
-    $RightsTable | Format-Table -AutoSize
-} else {
-    Write-Host "  Aucun droit DFS trouve pour cet utilisateur." -ForegroundColor Red
+$Sheet2 = $Workbook.Worksheets.Add()
+$Sheet2.Name = "Détail Groupes DFS"
+
+$DFSHeaders = @("Groupe_DFS","Type_Droit","Groupe_Fonctionnel_Membre")
+for ($col = 0; $col -lt $DFSHeaders.Count; $col++) {
+    $Cell = $Sheet2.Cells.Item(1, $col + 1)
+    $Cell.Value2 = $DFSHeaders[$col]
+    $Cell.Font.Bold = $true
+    $Cell.Interior.Color = [System.Drawing.ColorTranslator]::ToOle([System.Drawing.Color]::FromArgb(31,73,125))
+    $Cell.Font.Color = [System.Drawing.ColorTranslator]::ToOle([System.Drawing.Color]::White)
+}
+
+$Row2 = 2
+foreach ($DFSGroup in $DFSGroups) {
+
+    $Right = switch -Wildcard ($DFSGroup.Name) {
+        "*-RW" { "Lecture/Ecriture" }
+        "*-R"  { "Lecture seule"    }
+        default { "Inconnu"         }
+    }
+
+    $Members = Get-ADGroupMember -Identity $DFSGroup.DistinguishedName |
+               Where-Object { $_.Name -like "GG_F_CDAD-BDX*" }
+
+    if ($Members) {
+        foreach ($Member in $Members) {
+            $Sheet2.Cells.Item($Row2, 1).Value2 = $DFSGroup.Name
+            $Sheet2.Cells.Item($Row2, 2).Value2 = $Right
+            $Sheet2.Cells.Item($Row2, 3).Value2 = $Member.Name
+
+            $Color = if ($Right -eq "Lecture/Ecriture") {
+                [System.Drawing.Color]::FromArgb(198,239,206)
+            } else {
+                [System.Drawing.Color]::FromArgb(255,242,204)
+            }
+            1..3 | ForEach-Object {
+                $Sheet2.Cells.Item($Row2, $_).Interior.Color = `
+                    [System.Drawing.ColorTranslator]::ToOle($Color)
+            }
+            $Row2++
+        }
+    } else {
+        $Sheet2.Cells.Item($Row2, 1).Value2 = $DFSGroup.Name
+        $Sheet2.Cells.Item($Row2, 2).Value2 = $Right
+        $Sheet2.Cells.Item($Row2, 3).Value2 = "(Aucun groupe fonctionnel membre)"
+        $Row2++
+    }
+}
+
+$Sheet2.UsedRange.Borders.LineStyle = 1
+$Sheet2.UsedRange.Columns.AutoFit() | Out-Null
+$Sheet2.Rows.Item(1).AutoFilter() | Out-Null
+
+# -------------------------------------------------------
+# FEUILLE 3 : Légende
+# -------------------------------------------------------
+
+$Sheet3 = $Workbook.Worksheets.Add()
+$Sheet3.Name = "Légende"
+
+$Legends = @(
+    @{ Label="RW - Lecture / Ecriture"; Color=[System.Drawing.Color]::FromArgb(0,176,80);   Font=[System.Drawing.Color]::White }
+    @{ Label="R  - Lecture seule"     ; Color=[System.Drawing.Color]::FromArgb(255,192,0);  Font=[System.Drawing.Color]::Black }
+    @{ Label="Vide - Aucun droit"     ; Color=[System.Drawing.Color]::FromArgb(242,242,242);Font=[System.Drawing.Color]::Black }
+)
+
+$Sheet3.Cells.Item(1,1).Value2 = "LÉGENDE"
+$Sheet3.Cells.Item(1,1).Font.Bold = $true
+$Sheet3.Cells.Item(1,1).Font.Size = 14
+
+$LegRow = 3
+foreach ($L in $Legends) {
+    $Cell = $Sheet3.Cells.Item($LegRow, 2)
+    $Cell.Value2 = $L.Label
+    $Cell.Interior.Color = [System.Drawing.ColorTranslator]::ToOle($L.Color)
+    $Cell.Font.Color     = [System.Drawing.ColorTranslator]::ToOle($L.Font)
+    $Cell.Font.Bold      = $true
+    $Cell.ColumnWidth    = 30
+    $LegRow++
 }
 
 # -------------------------------------------------------
-# 4. Export CSV optionnel
+# Sauvegarde et fermeture
 # -------------------------------------------------------
 
-$Export = Read-Host "`nVoulez-vous exporter le resultat en CSV ? (O/N)"
-if ($Export -eq "O") {
-    $Path = ".\Droits_$UserName`_$(Get-Date -Format 'yyyyMMdd_HHmmss').csv"
-    $RightsTable | Export-Csv -Path $Path -NoTypeInformation -Encoding UTF8 -Delimiter ";"
-    Write-Host "  Export realise : $Path" -ForegroundColor Green
-}
+# Onglet 1 par défaut
+$Sheet1.Activate()
+
+$Workbook.SaveAs($ExcelPath)
+$Workbook.Close($false)
+$Excel.Quit()
+
+# Libération COM
+[System.Runtime.Interopservices.Marshal]::ReleaseComObject($Sheet3)  | Out-Null
+[System.Runtime.Interopservices.Marshal]::ReleaseComObject($Sheet2)  | Out-Null
+[System.Runtime.Interopservices.Marshal]::ReleaseComObject($Sheet1)  | Out-Null
+[System.Runtime.Interopservices.Marshal]::ReleaseComObject($Workbook) | Out-Null
+[System.Runtime.Interopservices.Marshal]::ReleaseComObject($Excel)    | Out-Null
+[GC]::Collect()
+
+Write-Host "`n✔ Fichier généré avec succès :" -ForegroundColor Green
+Write-Host "  $((Resolve-Path $ExcelPath).Path)" -ForegroundColor White
 ```
 
 ---
 
-## Utilisation
+## Structure du fichier Excel généré
 
-```powershell
-# Appel du script avec un nom d'utilisateur
-.\Get-UserDFSRights.ps1 -UserName "jdupont"
-```
+| Feuille | Contenu |
+|---------|---------|
+| **Matrice Droits** | Tableau croisé Groupes Fonctionnels × Groupes DFS avec `R` / `RW` |
+| **Détail Groupes DFS** | Quel groupe fonctionnel est membre de quel groupe DFS |
+| **Légende** | Code couleur |
 
----
+## Code couleur
 
-## Ce que fait le script
+| Couleur | Signification |
+|---------|--------------|
+| 🟢 Vert | `RW` - Lecture/Écriture |
+| 🟡 Jaune | `R` - Lecture seule |
+| ⬜ Gris | Aucun droit |
+| 🔵 Bleu | En-têtes |
 
-| Étape | Action |
-|-------|--------|
-| **1** | Récupère tous les groupes de l'utilisateur |
-| **2** | Filtre les groupes `GG_F_CDAD-BDX*` |
-| **3** | Pour chaque groupe fonctionnel, cherche les groupes parents `GG_BDX_BNU_CDAD*` |
-| **4** | Détermine le droit selon le suffixe `-R` ou `-RW` |
-| **5** | Affiche un récapitulatif + export CSV optionnel |
-
-> ⚠️ **Pré-requis** : Le compte exécutant le script doit avoir les droits en lecture sur l'AD. Aucun module supplémentaire requis, uniquement le module **ActiveDirectory** natif.
-
-
-
-
-
-
-
-
-
-
-
-Le fichier Excel généré contient **deux onglets** :
-
-- **Matrice des Droits** : tableau croisé avec les groupes fonctionnels `GG_F_CDAD-BDX_*` en lignes et les groupes DFS `GG_BDX_BNU_CDAD_*` en colonnes. Chaque cellule indique **RW** (vert) pour Lecture/Écriture ou **R** (jaune) pour Lecture seule. Les en-têtes sont figés pour faciliter la navigation.
-- **Détail des droits** : liste exhaustive de toutes les associations avec numérotation, pour un usage documentation.
-
-> ⚠️ **Les données sont des exemples fictifs** basés sur vos conventions de nommage. Il vous suffit de modifier le tableau `data` en haut du script avec vos vraies associations issues de l'AD pour régénérer la matrice.
-
-
-import openpyxl
-from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
-from openpyxl.utils import get_column_letter
-
-# -------------------------------------------------------
-# Données : Groupes fonctionnels et leurs groupes DFS
-# Format : (Groupe Fonctionnel, Groupe DFS, Droit)
-# -------------------------------------------------------
-
-data = [
-    ("GG_F_CDAD-BDX_DIRECTION",         "GG_BDX_BNU_CDAD_DIRECTION-RW",      "RW"),
-    ("GG_F_CDAD-BDX_DIRECTION",         "GG_BDX_BNU_CDAD_ARCHIVES-R",        "R"),
-    ("GG_F_CDAD-BDX_DIRECTION",         "GG_BDX_BNU_CDAD_COMMUN-RW",         "RW"),
-    ("GG_F_CDAD-BDX_COMPTABILITE",      "GG_BDX_BNU_CDAD_COMPTABILITE-RW",   "RW"),
-    ("GG_F_CDAD-BDX_COMPTABILITE",      "GG_BDX_BNU_CDAD_COMMUN-R",          "R"),
-    ("GG_F_CDAD-BDX_COMPTABILITE",      "GG_BDX_BNU_CDAD_ARCHIVES-R",        "R"),
-    ("GG_F_CDAD-BDX_RH",                "GG_BDX_BNU_CDAD_RH-RW",             "RW"),
-    ("GG_F_CDAD-BDX_RH",                "GG_BDX_BNU_CDAD_COMMUN-RW",         "RW"),
-    ("GG_F_CDAD-BDX_RH",                "GG_BDX_BNU_CDAD_ARCHIVES-R",        "R"),
-    ("GG_F_CDAD-BDX_INFORMATIQUE",      "GG_BDX_BNU_CDAD_INFORMATIQUE-RW",   "RW"),
-    ("GG_F_CDAD-BDX_INFORMATIQUE",      "GG_BDX_BNU_CDAD_COMMUN-RW",         "RW"),
-    ("GG_F_CDAD-BDX_INFORMATIQUE",      "GG_BDX_BNU_CDAD_ARCHIVES-RW",       "RW"),
-    ("GG_F_CDAD-BDX_JURIDIQUE",         "GG_BDX_BNU_CDAD_JURIDIQUE-RW",      "RW"),
-    ("GG_F_CDAD-BDX_JURIDIQUE",         "GG_BDX_BNU_CDAD_COMMUN-R",          "R"),
-    ("GG_F_CDAD-BDX_COMMERCIAL",        "GG_BDX_BNU_CDAD_COMMERCIAL-RW",     "RW"),
-    ("GG_F_CDAD-BDX_COMMERCIAL",        "GG_BDX_BNU_CDAD_COMMUN-R",          "R"),
-    ("GG_F_CDAD-BDX_COMMERCIAL",        "GG_BDX_BNU_CDAD_ARCHIVES-R",        "R"),
-    ("GG_F_CDAD-BDX_LOGISTIQUE",        "GG_BDX_BNU_CDAD_LOGISTIQUE-RW",     "RW"),
-    ("GG_F_CDAD-BDX_LOGISTIQUE",        "GG_BDX_BNU_CDAD_COMMUN-R",          "R"),
-]
-
-# -------------------------------------------------------
-# Construction des listes uniques
-# -------------------------------------------------------
-func_groups = sorted(set(row[0] for row in data))
-dfs_groups  = sorted(set(row[1] for row in data))
-
-# Dictionnaire de lookup (fonctionnel, dfs) -> droit
-rights_map = {(row[0], row[1]): row[2] for row in data}
-
-# -------------------------------------------------------
-# Création du workbook
-# -------------------------------------------------------
-wb = openpyxl.Workbook()
-ws = wb.active
-ws.title = "Matrice des Droits"
-
-# -------------------------------------------------------
-# Couleurs et styles
-# -------------------------------------------------------
-COLOR_HEADER_FUNC  = "1F3864"   # Bleu foncé - en-têtes lignes
-COLOR_HEADER_DFS   = "2E75B6"   # Bleu moyen - en-têtes colonnes
-COLOR_RW           = "70AD47"   # Vert       - RW
-COLOR_R            = "FFD966"   # Jaune      - R
-COLOR_EMPTY        = "F2F2F2"   # Gris clair - vide
-COLOR_TITLE_BG     = "112244"   # Bleu très foncé - titre
-COLOR_ROW_ALT      = "DEEAF1"   # Bleu très clair - alternance lignes
-
-FONT_WHITE_BOLD    = Font(name="Calibri", bold=True, color="FFFFFF", size=11)
-FONT_DARK_BOLD     = Font(name="Calibri", bold=True, color="1F3864", size=10)
-FONT_CELL          = Font(name="Calibri", bold=True, size=10)
-
-ALIGN_CENTER       = Alignment(horizontal="center", vertical="center", wrap_text=True)
-ALIGN_LEFT         = Alignment(horizontal="left",   vertical="center", wrap_text=True)
-
-thin = Side(border_style="thin", color="BFBFBF")
-thick = Side(border_style="medium", color="1F3864")
-BORDER_THIN  = Border(left=thin, right=thin, top=thin, bottom=thin)
-BORDER_THICK = Border(left=thick, right=thick, top=thick, bottom=thick)
-
-def fill(hex_color):
-    return PatternFill(fill_type="solid", fgColor=hex_color)
-
-# -------------------------------------------------------
-# TITRE principal (ligne 1)
-# -------------------------------------------------------
-ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(dfs_groups)+1)
-title_cell = ws.cell(row=1, column=1)
-title_cell.value = "MATRICE DES DROITS — Groupes Fonctionnels vs Groupes DFS"
-title_cell.font = Font(name="Calibri", bold=True, color="FFFFFF", size=14)
-title_cell.fill = fill(COLOR_TITLE_BG)
-title_cell.alignment = ALIGN_CENTER
-title_cell.border = BORDER_THICK
-ws.row_dimensions[1].height = 35
-
-# -------------------------------------------------------
-# LÉGENDE (ligne 2)
-# -------------------------------------------------------
-legend_row = 2
-ws.row_dimensions[legend_row].height = 20
-
-# RW
-rw_cell = ws.cell(row=legend_row, column=1)
-rw_cell.value = "Légende :"
-rw_cell.font = Font(name="Calibri", bold=True, size=10, color="1F3864")
-rw_cell.alignment = ALIGN_LEFT
-
-rw_label = ws.cell(row=legend_row, column=2)
-rw_label.value = "RW = Lecture / Écriture"
-rw_label.fill = fill(COLOR_RW)
-rw_label.font = FONT_CELL
-rw_label.alignment = ALIGN_CENTER
-rw_label.border = BORDER_THIN
-
-r_label = ws.cell(row=legend_row, column=3)
-r_label.value = "R  = Lecture seule"
-r_label.fill = fill(COLOR_R)
-r_label.font = FONT_CELL
-r_label.alignment = ALIGN_CENTER
-r_label.border = BORDER_THIN
-
-empty_label = ws.cell(row=legend_row, column=4)
-empty_label.value = "Vide = Aucun droit"
-empty_label.fill = fill(COLOR_EMPTY)
-empty_label.font = Font(name="Calibri", italic=True, size=10, color="808080")
-empty_label.alignment = ALIGN_CENTER
-empty_label.border = BORDER_THIN
-
-# -------------------------------------------------------
-# EN-TÊTE COLONNES (ligne 3) — Groupes DFS
-# -------------------------------------------------------
-header_row = 3
-ws.row_dimensions[header_row].height = 80
-
-# Coin supérieur gauche
-corner = ws.cell(row=header_row, column=1)
-corner.value = "Groupe Fonctionnel \\ Groupe DFS"
-corner.font = FONT_WHITE_BOLD
-corner.fill = fill(COLOR_HEADER_FUNC)
-corner.alignment = ALIGN_CENTER
-corner.border = BORDER_THIN
-
-for col_idx, dfs in enumerate(dfs_groups, start=2):
-    cell = ws.cell(row=header_row, column=col_idx)
-    cell.value = dfs
-    cell.font = FONT_WHITE_BOLD
-    cell.fill = fill(COLOR_HEADER_DFS)
-    cell.alignment = Alignment(horizontal="center", vertical="bottom", wrap_text=True, text_rotation=45)
-    cell.border = BORDER_THIN
-
-# -------------------------------------------------------
-# LIGNES DE DONNÉES
-# -------------------------------------------------------
-data_start_row = 4
-
-for row_idx, func in enumerate(func_groups):
-    excel_row = data_start_row + row_idx
-    ws.row_dimensions[excel_row].height = 28
-
-    # Alternance de couleur de fond pour les lignes
-    row_bg = "FFFFFF" if row_idx % 2 == 0 else COLOR_ROW_ALT
-
-    # En-tête de ligne — Groupe Fonctionnel
-    row_header = ws.cell(row=excel_row, column=1)
-    row_header.value = func
-    row_header.font = Font(name="Calibri", bold=True, color="FFFFFF", size=10)
-    row_header.fill = fill(COLOR_HEADER_FUNC)
-    row_header.alignment = ALIGN_LEFT
-    row_header.border = BORDER_THIN
-
-    # Cellules droits
-    for col_idx, dfs in enumerate(dfs_groups, start=2):
-        cell = ws.cell(row=excel_row, column=col_idx)
-        right = rights_map.get((func, dfs), "")
-
-        if right == "RW":
-            cell.value = "RW"
-            cell.fill = fill(COLOR_RW)
-            cell.font = Font(name="Calibri", bold=True, color="1A3A00", size=11)
-        elif right == "R":
-            cell.value = "R"
-            cell.fill = fill(COLOR_R)
-            cell.font = Font(name="Calibri", bold=True, color="7D4C00", size=11)
-        else:
-            cell.value = ""
-            cell.fill = fill(row_bg)
-
-        cell.alignment = ALIGN_CENTER
-        cell.border = BORDER_THIN
-
-# -------------------------------------------------------
-# LARGEURS DE COLONNES
-# -------------------------------------------------------
-ws.column_dimensions[get_column_letter(1)].width = 38
-for col_idx in range(2, len(dfs_groups) + 2):
-    ws.column_dimensions[get_column_letter(col_idx)].width = 16
-
-# -------------------------------------------------------
-# FIGER LES VOLETS (en-têtes fixes)
-# -------------------------------------------------------
-ws.freeze_panes = "B4"
-
-# -------------------------------------------------------
-# Onglet récapitulatif détaillé
-# -------------------------------------------------------
-ws2 = wb.create_sheet(title="Détail des droits")
-
-ws2.row_dimensions[1].height = 30
-ws2.merge_cells("A1:D1")
-ws2_title = ws2.cell(row=1, column=1)
-ws2_title.value = "Détail des associations Groupe Fonctionnel — Groupe DFS — Droit"
-ws2_title.font = Font(name="Calibri", bold=True, color="FFFFFF", size=13)
-ws2_title.fill = fill(COLOR_TITLE_BG)
-ws2_title.alignment = ALIGN_CENTER
-
-headers = ["#", "Groupe Fonctionnel", "Groupe DFS", "Droit"]
-col_widths = [5, 38, 42, 20]
-for col_idx, (h, w) in enumerate(zip(headers, col_widths), start=1):
-    cell = ws2.cell(row=2, column=col_idx)
-    cell.value = h
-    cell.font = FONT_WHITE_BOLD
-    cell.fill = fill(COLOR_HEADER_DFS)
-    cell.alignment = ALIGN_CENTER
-    cell.border = BORDER_THIN
-    ws2.column_dimensions[get_column_letter(col_idx)].width = w
-
-ws2.row_dimensions[2].height = 22
-
-for i, (func, dfs, right) in enumerate(sorted(data, key=lambda x: (x[0], x[2])), start=1):
-    r = i + 2
-    row_bg2 = "FFFFFF" if i % 2 == 0 else COLOR_ROW_ALT
-
-    num_cell = ws2.cell(row=r, column=1, value=i)
-    num_cell.alignment = ALIGN_CENTER
-    num_cell.border = BORDER_THIN
-    num_cell.fill = fill(row_bg2)
-    num_cell.font = Font(name="Calibri", size=10, color="808080")
-
-    func_cell = ws2.cell(row=r, column=2, value=func)
-    func_cell.font = FONT_DARK_BOLD
-    func_cell.fill = fill(row_bg2)
-    func_cell.alignment = ALIGN_LEFT
-    func_cell.border = BORDER_THIN
-
-    dfs_cell = ws2.cell(row=r, column=3, value=dfs)
-    dfs_cell.font = Font(name="Calibri", size=10, color="1F3864")
-    dfs_cell.fill = fill(row_bg2)
-    dfs_cell.alignment = ALIGN_LEFT
-    dfs_cell.border = BORDER_THIN
-
-    right_cell = ws2.cell(row=r, column=4, value=right)
-    if right == "RW":
-        right_cell.fill = fill(COLOR_RW)
-        right_cell.font = Font(name="Calibri", bold=True, color="1A3A00", size=11)
-    else:
-        right_cell.fill = fill(COLOR_R)
-        right_cell.font = Font(name="Calibri", bold=True, color="7D4C00", size=11)
-    right_cell.alignment = ALIGN_CENTER
-    right_cell.border = BORDER_THIN
-
-    ws2.row_dimensions[r].height = 22
-
-# -------------------------------------------------------
-# Sauvegarde
-# -------------------------------------------------------
-wb.save("matrice_droits_dfs.xlsx")
-print("Fichier genere : matrice_droits_dfs.xlsx")
+> ⚠️ **Pré-requis** : Microsoft Excel doit être installé sur la machine (utilisation du COM Object natif Windows - aucun module tiers)
