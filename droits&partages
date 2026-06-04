@@ -2,3 +2,131 @@
 GG_F_CDAD-BDX
 Ces groupes sont membre d'autres groupes commençant par : 
 GG_BDX_BNU_CDAD et terminant par -R ou -RW par rapports aux permissions read and write. Peux tu me faire avec une commande powershell dans lequel je n'ai pas le droit d'installer de nouveau module mais j'ai droit au commande ad, de me lister pour une utilisateur les groupes dans lequel il fait parti et les droits qu'il pourrais avoir
+
+
+
+# Script PowerShell - Matrice des droits utilisateur AD
+
+```powershell
+# ============================================================
+# Script : Get-UserDFSRights.ps1
+# Description : Liste les groupes et droits DFS d'un utilisateur
+# ============================================================
+
+param(
+    [Parameter(Mandatory=$true)]
+    [string]$UserName
+)
+
+# -------------------------------------------------------
+# 1. Récupération des groupes fonctionnels de l'utilisateur
+#    (groupes commençant par GG_F_CDAD-BDX)
+# -------------------------------------------------------
+
+Write-Host "`n========================================" -ForegroundColor Cyan
+Write-Host " Analyse des droits pour : $UserName" -ForegroundColor Cyan
+Write-Host "========================================`n" -ForegroundColor Cyan
+
+# Récupère TOUS les groupes de l'utilisateur (récursif)
+$AllGroups = Get-ADPrincipalGroupMembership -Identity $UserName | Select-Object -ExpandProperty Name
+
+# Filtre les groupes fonctionnels
+$FunctionalGroups = $AllGroups | Where-Object { $_ -like "GG_F_CDAD-BDX*" }
+
+Write-Host "[ GROUPES FONCTIONNELS ]" -ForegroundColor Yellow
+Write-Host "---------------------------------------"
+if ($FunctionalGroups) {
+    $FunctionalGroups | ForEach-Object { Write-Host "  -> $_" -ForegroundColor White }
+} else {
+    Write-Host "  Aucun groupe fonctionnel trouve." -ForegroundColor Red
+}
+
+# -------------------------------------------------------
+# 2. Pour chaque groupe fonctionnel, on cherche les groupes
+#    DFS parents (GG_BDX_BNU_CDAD*) dont il est membre
+# -------------------------------------------------------
+
+Write-Host "`n[ DROITS DFS ASSOCIES ]" -ForegroundColor Yellow
+Write-Host "---------------------------------------"
+
+$RightsTable = @()
+
+foreach ($FuncGroup in $FunctionalGroups) {
+    
+    # Récupère les groupes parents du groupe fonctionnel
+    $ParentGroups = Get-ADPrincipalGroupMembership -Identity $FuncGroup | 
+                    Where-Object { $_.Name -like "GG_BDX_BNU_CDAD*" }
+
+    foreach ($ParentGroup in $ParentGroups) {
+        
+        # Détermine le niveau de droit selon le suffixe
+        $Right = switch -Wildcard ($ParentGroup.Name) {
+            "*-RW"  { "Lecture / Ecriture (RW)" }
+            "*-R"   { "Lecture seule       (R) " }
+            default { "Droit inconnu           " }
+        }
+
+        # Couleur selon le droit
+        $Color = if ($ParentGroup.Name -like "*-RW") { "Green" } else { "DarkYellow" }
+
+        Write-Host "  [Groupe Fonctionnel] $FuncGroup" -ForegroundColor Gray
+        Write-Host "  [Groupe DFS]         $($ParentGroup.Name)" -ForegroundColor $Color
+        Write-Host "  [Droit]              $Right" -ForegroundColor $Color
+        Write-Host "  ---" 
+
+        # Alimente le tableau récapitulatif
+        $RightsTable += [PSCustomObject]@{
+            Utilisateur        = $UserName
+            Groupe_Fonctionnel = $FuncGroup
+            Groupe_DFS         = $ParentGroup.Name
+            Droit              = $Right
+        }
+    }
+}
+
+# -------------------------------------------------------
+# 3. Tableau récapitulatif
+# -------------------------------------------------------
+
+Write-Host "`n[ RECAPITULATIF ]" -ForegroundColor Cyan
+Write-Host "---------------------------------------"
+if ($RightsTable) {
+    $RightsTable | Format-Table -AutoSize
+} else {
+    Write-Host "  Aucun droit DFS trouve pour cet utilisateur." -ForegroundColor Red
+}
+
+# -------------------------------------------------------
+# 4. Export CSV optionnel
+# -------------------------------------------------------
+
+$Export = Read-Host "`nVoulez-vous exporter le resultat en CSV ? (O/N)"
+if ($Export -eq "O") {
+    $Path = ".\Droits_$UserName`_$(Get-Date -Format 'yyyyMMdd_HHmmss').csv"
+    $RightsTable | Export-Csv -Path $Path -NoTypeInformation -Encoding UTF8 -Delimiter ";"
+    Write-Host "  Export realise : $Path" -ForegroundColor Green
+}
+```
+
+---
+
+## Utilisation
+
+```powershell
+# Appel du script avec un nom d'utilisateur
+.\Get-UserDFSRights.ps1 -UserName "jdupont"
+```
+
+---
+
+## Ce que fait le script
+
+| Étape | Action |
+|-------|--------|
+| **1** | Récupère tous les groupes de l'utilisateur |
+| **2** | Filtre les groupes `GG_F_CDAD-BDX*` |
+| **3** | Pour chaque groupe fonctionnel, cherche les groupes parents `GG_BDX_BNU_CDAD*` |
+| **4** | Détermine le droit selon le suffixe `-R` ou `-RW` |
+| **5** | Affiche un récapitulatif + export CSV optionnel |
+
+> ⚠️ **Pré-requis** : Le compte exécutant le script doit avoir les droits en lecture sur l'AD. Aucun module supplémentaire requis, uniquement le module **ActiveDirectory** natif.
