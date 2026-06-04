@@ -208,3 +208,27 @@ $PremierDFS = $GroupesDFS[0].Name
 Write-Host "Groupe DFS : $PremierDFS"
 Get-ADGroupMember -Identity $PremierDFS | Select-Object Name, SamAccountName, ObjectClass | Format-Table -AutoSize
 
+
+
+
+
+
+
+# Chercher un groupe DFS qui a des membres
+$GroupesDFS = Get-ADGroup -Filter {Name -like "GG_BDX_BNU_CDAD*" -and Description -like "*Groupe Global DFS*"} -Properties Description | 
+    Select-Object Name | Sort-Object Name
+
+Write-Host "=== RECHERCHE DFS AVEC MEMBRES ===" -ForegroundColor Cyan
+
+foreach ($dfs in $GroupesDFS | Select-Object -First 20) {
+    $membres = Get-ADGroupMember -Identity $dfs.Name
+    if ($membres.Count -gt 0) {
+        Write-Host "`nTROUVE ! $($dfs.Name) - $($membres.Count) membre(s)" -ForegroundColor Green
+        $membres | Select-Object Name, ObjectClass | Format-Table -AutoSize
+        break
+    } else {
+        Write-Host "Vide : $($dfs.Name)" -ForegroundColor Yellow
+    }
+}
+
+
