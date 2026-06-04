@@ -1,4 +1,4 @@
- Je fais une matrice des droits, chaque utilisateurs font partis d'un groupe fonctionnel commançant par le préfixe : 
+i Je fais une matrice des droits, chaque utilisateurs font partis d'un groupe fonctionnel commançant par le préfixe : 
 GG_F_CDAD-BDX
 Ces groupes sont membre d'autres groupes commençant par : 
 GG_BDX_BNU_CDAD et terminant par -R ou -RW par rapports aux permissions read and write. Peux tu me faire avec une commande powershell dans lequel je n'ai pas le droit d'installer de nouveau module mais j'ai droit au commande ad, de me lister pour une utilisateur les groupes dans lequel il fait parti et les droits qu'il pourrais avoir
@@ -147,3 +147,262 @@ Le fichier Excel généré contient **deux onglets** :
 - **Détail des droits** : liste exhaustive de toutes les associations avec numérotation, pour un usage documentation.
 
 > ⚠️ **Les données sont des exemples fictifs** basés sur vos conventions de nommage. Il vous suffit de modifier le tableau `data` en haut du script avec vos vraies associations issues de l'AD pour régénérer la matrice.
+
+
+import openpyxl
+from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
+
+# -------------------------------------------------------
+# Données : Groupes fonctionnels et leurs groupes DFS
+# Format : (Groupe Fonctionnel, Groupe DFS, Droit)
+# -------------------------------------------------------
+
+data = [
+    ("GG_F_CDAD-BDX_DIRECTION",         "GG_BDX_BNU_CDAD_DIRECTION-RW",      "RW"),
+    ("GG_F_CDAD-BDX_DIRECTION",         "GG_BDX_BNU_CDAD_ARCHIVES-R",        "R"),
+    ("GG_F_CDAD-BDX_DIRECTION",         "GG_BDX_BNU_CDAD_COMMUN-RW",         "RW"),
+    ("GG_F_CDAD-BDX_COMPTABILITE",      "GG_BDX_BNU_CDAD_COMPTABILITE-RW",   "RW"),
+    ("GG_F_CDAD-BDX_COMPTABILITE",      "GG_BDX_BNU_CDAD_COMMUN-R",          "R"),
+    ("GG_F_CDAD-BDX_COMPTABILITE",      "GG_BDX_BNU_CDAD_ARCHIVES-R",        "R"),
+    ("GG_F_CDAD-BDX_RH",                "GG_BDX_BNU_CDAD_RH-RW",             "RW"),
+    ("GG_F_CDAD-BDX_RH",                "GG_BDX_BNU_CDAD_COMMUN-RW",         "RW"),
+    ("GG_F_CDAD-BDX_RH",                "GG_BDX_BNU_CDAD_ARCHIVES-R",        "R"),
+    ("GG_F_CDAD-BDX_INFORMATIQUE",      "GG_BDX_BNU_CDAD_INFORMATIQUE-RW",   "RW"),
+    ("GG_F_CDAD-BDX_INFORMATIQUE",      "GG_BDX_BNU_CDAD_COMMUN-RW",         "RW"),
+    ("GG_F_CDAD-BDX_INFORMATIQUE",      "GG_BDX_BNU_CDAD_ARCHIVES-RW",       "RW"),
+    ("GG_F_CDAD-BDX_JURIDIQUE",         "GG_BDX_BNU_CDAD_JURIDIQUE-RW",      "RW"),
+    ("GG_F_CDAD-BDX_JURIDIQUE",         "GG_BDX_BNU_CDAD_COMMUN-R",          "R"),
+    ("GG_F_CDAD-BDX_COMMERCIAL",        "GG_BDX_BNU_CDAD_COMMERCIAL-RW",     "RW"),
+    ("GG_F_CDAD-BDX_COMMERCIAL",        "GG_BDX_BNU_CDAD_COMMUN-R",          "R"),
+    ("GG_F_CDAD-BDX_COMMERCIAL",        "GG_BDX_BNU_CDAD_ARCHIVES-R",        "R"),
+    ("GG_F_CDAD-BDX_LOGISTIQUE",        "GG_BDX_BNU_CDAD_LOGISTIQUE-RW",     "RW"),
+    ("GG_F_CDAD-BDX_LOGISTIQUE",        "GG_BDX_BNU_CDAD_COMMUN-R",          "R"),
+]
+
+# -------------------------------------------------------
+# Construction des listes uniques
+# -------------------------------------------------------
+func_groups = sorted(set(row[0] for row in data))
+dfs_groups  = sorted(set(row[1] for row in data))
+
+# Dictionnaire de lookup (fonctionnel, dfs) -> droit
+rights_map = {(row[0], row[1]): row[2] for row in data}
+
+# -------------------------------------------------------
+# Création du workbook
+# -------------------------------------------------------
+wb = openpyxl.Workbook()
+ws = wb.active
+ws.title = "Matrice des Droits"
+
+# -------------------------------------------------------
+# Couleurs et styles
+# -------------------------------------------------------
+COLOR_HEADER_FUNC  = "1F3864"   # Bleu foncé - en-têtes lignes
+COLOR_HEADER_DFS   = "2E75B6"   # Bleu moyen - en-têtes colonnes
+COLOR_RW           = "70AD47"   # Vert       - RW
+COLOR_R            = "FFD966"   # Jaune      - R
+COLOR_EMPTY        = "F2F2F2"   # Gris clair - vide
+COLOR_TITLE_BG     = "112244"   # Bleu très foncé - titre
+COLOR_ROW_ALT      = "DEEAF1"   # Bleu très clair - alternance lignes
+
+FONT_WHITE_BOLD    = Font(name="Calibri", bold=True, color="FFFFFF", size=11)
+FONT_DARK_BOLD     = Font(name="Calibri", bold=True, color="1F3864", size=10)
+FONT_CELL          = Font(name="Calibri", bold=True, size=10)
+
+ALIGN_CENTER       = Alignment(horizontal="center", vertical="center", wrap_text=True)
+ALIGN_LEFT         = Alignment(horizontal="left",   vertical="center", wrap_text=True)
+
+thin = Side(border_style="thin", color="BFBFBF")
+thick = Side(border_style="medium", color="1F3864")
+BORDER_THIN  = Border(left=thin, right=thin, top=thin, bottom=thin)
+BORDER_THICK = Border(left=thick, right=thick, top=thick, bottom=thick)
+
+def fill(hex_color):
+    return PatternFill(fill_type="solid", fgColor=hex_color)
+
+# -------------------------------------------------------
+# TITRE principal (ligne 1)
+# -------------------------------------------------------
+ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(dfs_groups)+1)
+title_cell = ws.cell(row=1, column=1)
+title_cell.value = "MATRICE DES DROITS — Groupes Fonctionnels vs Groupes DFS"
+title_cell.font = Font(name="Calibri", bold=True, color="FFFFFF", size=14)
+title_cell.fill = fill(COLOR_TITLE_BG)
+title_cell.alignment = ALIGN_CENTER
+title_cell.border = BORDER_THICK
+ws.row_dimensions[1].height = 35
+
+# -------------------------------------------------------
+# LÉGENDE (ligne 2)
+# -------------------------------------------------------
+legend_row = 2
+ws.row_dimensions[legend_row].height = 20
+
+# RW
+rw_cell = ws.cell(row=legend_row, column=1)
+rw_cell.value = "Légende :"
+rw_cell.font = Font(name="Calibri", bold=True, size=10, color="1F3864")
+rw_cell.alignment = ALIGN_LEFT
+
+rw_label = ws.cell(row=legend_row, column=2)
+rw_label.value = "RW = Lecture / Écriture"
+rw_label.fill = fill(COLOR_RW)
+rw_label.font = FONT_CELL
+rw_label.alignment = ALIGN_CENTER
+rw_label.border = BORDER_THIN
+
+r_label = ws.cell(row=legend_row, column=3)
+r_label.value = "R  = Lecture seule"
+r_label.fill = fill(COLOR_R)
+r_label.font = FONT_CELL
+r_label.alignment = ALIGN_CENTER
+r_label.border = BORDER_THIN
+
+empty_label = ws.cell(row=legend_row, column=4)
+empty_label.value = "Vide = Aucun droit"
+empty_label.fill = fill(COLOR_EMPTY)
+empty_label.font = Font(name="Calibri", italic=True, size=10, color="808080")
+empty_label.alignment = ALIGN_CENTER
+empty_label.border = BORDER_THIN
+
+# -------------------------------------------------------
+# EN-TÊTE COLONNES (ligne 3) — Groupes DFS
+# -------------------------------------------------------
+header_row = 3
+ws.row_dimensions[header_row].height = 80
+
+# Coin supérieur gauche
+corner = ws.cell(row=header_row, column=1)
+corner.value = "Groupe Fonctionnel \\ Groupe DFS"
+corner.font = FONT_WHITE_BOLD
+corner.fill = fill(COLOR_HEADER_FUNC)
+corner.alignment = ALIGN_CENTER
+corner.border = BORDER_THIN
+
+for col_idx, dfs in enumerate(dfs_groups, start=2):
+    cell = ws.cell(row=header_row, column=col_idx)
+    cell.value = dfs
+    cell.font = FONT_WHITE_BOLD
+    cell.fill = fill(COLOR_HEADER_DFS)
+    cell.alignment = Alignment(horizontal="center", vertical="bottom", wrap_text=True, text_rotation=45)
+    cell.border = BORDER_THIN
+
+# -------------------------------------------------------
+# LIGNES DE DONNÉES
+# -------------------------------------------------------
+data_start_row = 4
+
+for row_idx, func in enumerate(func_groups):
+    excel_row = data_start_row + row_idx
+    ws.row_dimensions[excel_row].height = 28
+
+    # Alternance de couleur de fond pour les lignes
+    row_bg = "FFFFFF" if row_idx % 2 == 0 else COLOR_ROW_ALT
+
+    # En-tête de ligne — Groupe Fonctionnel
+    row_header = ws.cell(row=excel_row, column=1)
+    row_header.value = func
+    row_header.font = Font(name="Calibri", bold=True, color="FFFFFF", size=10)
+    row_header.fill = fill(COLOR_HEADER_FUNC)
+    row_header.alignment = ALIGN_LEFT
+    row_header.border = BORDER_THIN
+
+    # Cellules droits
+    for col_idx, dfs in enumerate(dfs_groups, start=2):
+        cell = ws.cell(row=excel_row, column=col_idx)
+        right = rights_map.get((func, dfs), "")
+
+        if right == "RW":
+            cell.value = "RW"
+            cell.fill = fill(COLOR_RW)
+            cell.font = Font(name="Calibri", bold=True, color="1A3A00", size=11)
+        elif right == "R":
+            cell.value = "R"
+            cell.fill = fill(COLOR_R)
+            cell.font = Font(name="Calibri", bold=True, color="7D4C00", size=11)
+        else:
+            cell.value = ""
+            cell.fill = fill(row_bg)
+
+        cell.alignment = ALIGN_CENTER
+        cell.border = BORDER_THIN
+
+# -------------------------------------------------------
+# LARGEURS DE COLONNES
+# -------------------------------------------------------
+ws.column_dimensions[get_column_letter(1)].width = 38
+for col_idx in range(2, len(dfs_groups) + 2):
+    ws.column_dimensions[get_column_letter(col_idx)].width = 16
+
+# -------------------------------------------------------
+# FIGER LES VOLETS (en-têtes fixes)
+# -------------------------------------------------------
+ws.freeze_panes = "B4"
+
+# -------------------------------------------------------
+# Onglet récapitulatif détaillé
+# -------------------------------------------------------
+ws2 = wb.create_sheet(title="Détail des droits")
+
+ws2.row_dimensions[1].height = 30
+ws2.merge_cells("A1:D1")
+ws2_title = ws2.cell(row=1, column=1)
+ws2_title.value = "Détail des associations Groupe Fonctionnel — Groupe DFS — Droit"
+ws2_title.font = Font(name="Calibri", bold=True, color="FFFFFF", size=13)
+ws2_title.fill = fill(COLOR_TITLE_BG)
+ws2_title.alignment = ALIGN_CENTER
+
+headers = ["#", "Groupe Fonctionnel", "Groupe DFS", "Droit"]
+col_widths = [5, 38, 42, 20]
+for col_idx, (h, w) in enumerate(zip(headers, col_widths), start=1):
+    cell = ws2.cell(row=2, column=col_idx)
+    cell.value = h
+    cell.font = FONT_WHITE_BOLD
+    cell.fill = fill(COLOR_HEADER_DFS)
+    cell.alignment = ALIGN_CENTER
+    cell.border = BORDER_THIN
+    ws2.column_dimensions[get_column_letter(col_idx)].width = w
+
+ws2.row_dimensions[2].height = 22
+
+for i, (func, dfs, right) in enumerate(sorted(data, key=lambda x: (x[0], x[2])), start=1):
+    r = i + 2
+    row_bg2 = "FFFFFF" if i % 2 == 0 else COLOR_ROW_ALT
+
+    num_cell = ws2.cell(row=r, column=1, value=i)
+    num_cell.alignment = ALIGN_CENTER
+    num_cell.border = BORDER_THIN
+    num_cell.fill = fill(row_bg2)
+    num_cell.font = Font(name="Calibri", size=10, color="808080")
+
+    func_cell = ws2.cell(row=r, column=2, value=func)
+    func_cell.font = FONT_DARK_BOLD
+    func_cell.fill = fill(row_bg2)
+    func_cell.alignment = ALIGN_LEFT
+    func_cell.border = BORDER_THIN
+
+    dfs_cell = ws2.cell(row=r, column=3, value=dfs)
+    dfs_cell.font = Font(name="Calibri", size=10, color="1F3864")
+    dfs_cell.fill = fill(row_bg2)
+    dfs_cell.alignment = ALIGN_LEFT
+    dfs_cell.border = BORDER_THIN
+
+    right_cell = ws2.cell(row=r, column=4, value=right)
+    if right == "RW":
+        right_cell.fill = fill(COLOR_RW)
+        right_cell.font = Font(name="Calibri", bold=True, color="1A3A00", size=11)
+    else:
+        right_cell.fill = fill(COLOR_R)
+        right_cell.font = Font(name="Calibri", bold=True, color="7D4C00", size=11)
+    right_cell.alignment = ALIGN_CENTER
+    right_cell.border = BORDER_THIN
+
+    ws2.row_dimensions[r].height = 22
+
+# -------------------------------------------------------
+# Sauvegarde
+# -------------------------------------------------------
+wb.save("matrice_droits_dfs.xlsx")
+print("Fichier genere : matrice_droits_dfs.xlsx")
