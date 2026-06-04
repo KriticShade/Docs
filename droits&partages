@@ -196,14 +196,15 @@ Write-Host "Le FCT est membre ? : $($MembresSam -contains $FCTInfo.SamAccountNam
 
 
 
+# Test avec filtre sur description
+Write-Host "=== GROUPES DFS AVEC DESCRIPTION ===" -ForegroundColor Cyan
+$GroupesDFS = Get-ADGroup -Filter {Description -like "*Groupe Global DFS*"} -Properties Description | 
+    Select-Object Name, Description | Sort-Object Name
+$GroupesDFS | Format-Table -AutoSize
 
+Write-Host "`nNombre de groupes DFS : $($GroupesDFS.Count)"
 
-
-# Test inverse : le groupe fonctionnel contient-il des groupes DFS ?
-$PremierFCT = "GG_F_CDAD-BDX_ALL"
-Write-Host "=== MEMBRES DU GROUPE FONCTIONNEL ===" -ForegroundColor Cyan
-Get-ADGroupMember -Identity $PremierFCT | Select-Object Name, SamAccountName, ObjectClass | Format-Table -AutoSize
-
-Write-Host "`n=== GROUPES DONT GG_F_CDAD-BDX_ALL EST MEMBRE ===" -ForegroundColor Cyan
-Get-ADPrincipalGroupMembership -Identity $PremierFCT | Select-Object Name | Format-Table -AutoSize
-
+Write-Host "`n=== TEST MEMBRES PREMIER DFS ===" -ForegroundColor Cyan
+$PremierDFS = $GroupesDFS[0].Name
+Write-Host "Groupe DFS : $PremierDFS"
+Get-ADGroupMember -Identity $PremierDFS | Select-Object Name, SamAccountName, ObjectClass | Format-Table -AutoSize
