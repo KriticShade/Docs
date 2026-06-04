@@ -1,109 +1,102 @@
-$ErrorActionPreference = "Stop"
+$ExcelPath = "C:\Temp\Matrice_Droits_DFS.xlsx"
 
-try {
-    # Chemin du fichier - MODIFIEZ ICI
-    $ExcelPath = "C:\Temp\Matrice_Droits_DFS.xlsx"
-    if (!(Test-Path "C:\Temp")) { New-Item -ItemType Directory -Path "C:\Temp" | Out-Null }
+# Récupération des groupes
+$GroupesFonctionnels = Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} | Select-Object -ExpandProperty Name | Sort-Object
+$GroupesDFS = Get-ADGroup -Filter {Name -like "GG_BDX_BNU_CDAD*"} | Select-Object -ExpandProperty Name | Sort-Object
 
-    Write-Host "Récupération des groupes AD..." -ForegroundColor Cyan
+Write-Host "Groupes Fonctionnels trouvés : $($GroupesFonctionnels.Count)"
+Write-Host "Groupes DFS trouvés : $($GroupesDFS.Count)"
 
-    # Récupération des groupes
-    $GroupesFonctionnels = Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} | Select-Object -ExpandProperty Name | Sort-Object
-    $GroupesDFS = Get-ADGroup -Filter {Name -like "GG_BDX_BNU_CDAD*"} | Select-Object -ExpandProperty Name | Sort-Object
+# Construction de la matrice
+$Matrice = @{}
 
-    Write-Host "Groupes fonctionnels trouvés : $($GroupesFonctionnels.Count)" -ForegroundColor Green
-    Write-Host "Groupes DFS trouvés : $($GroupesDFS.Count)" -ForegroundColor Green
-
-    # Création de la matrice - récupération des membres de chaque groupe DFS
-    $Matrice = @{}
-    foreach ($dfs in $GroupesDFS) {
-        $membres = Get-ADGroupMember -Identity $dfs | Select-Object -ExpandProperty Name
-        $Matrice[$dfs] = $membres
-    }
-
-    # Création Excel
-    $Excel = New-Object -ComObject Excel.Application
-    $Excel.Visible = $false
-    $Excel.DisplayAlerts = $false
-    $Workbook = $Excel.Workbooks.Add()
-    $Sheet = $Workbook.Worksheets.Item(1)
-    $Sheet.Name = "Matrice Droits"
-
-    # En-têtes - Groupes fonctionnels en colonnes (ligne 1 à partir de colonne 2)
-    for ($col = 0; $col -lt $GroupesFonctionnels.Count; $col++) {
-        $cell = $Sheet.Cells.Item(1, $col + 2)
-        $cell.Value2 = $GroupesFonctionnels[$col]
-        $cell.Font.Bold = $true
-        $cell.Interior.ColorIndex = 37
-        $cell.Font.Color = -2147483640
-        $cell.Orientation = 90
-        $cell.RowHeight = 120
-        $cell.ColumnWidth = 4
-        $cell.HorizontalAlignment = -4108
-        $cell.VerticalAlignment = -4107
-    }
-
-    # Groupes DFS en lignes (colonne 1 à partir de ligne 2)
-    for ($row = 0; $row -lt $GroupesDFS.Count; $row++) {
-        $cell = $Sheet.Cells.Item($row + 2, 1)
-        $cell.Value2 = $GroupesDFS[$row]
-        $cell.Font.Bold = $true
-        $cell.Interior.ColorIndex = 15
-        $cell.ColumnWidth = 45
-    }
-
-    # Remplissage de la matrice
-    for ($row = 0; $row -lt $GroupesDFS.Count; $row++) {
-        $dfs = $GroupesDFS[$row]
-        
-        # Déterminer la permission selon le suffixe
-        if ($dfs -match "-RW$") {
-            $permission = "W"
-            $couleur = 43  # Vert
-        } elseif ($dfs -match "-R$") {
-            $permission = "R"
-            $couleur = 6   # Jaune
-        } else {
-            $permission = ""
-            $couleur = 0
-        }
-
-        for ($col = 0; $col -lt $GroupesFonctionnels.Count; $col++) {
-            $fonctionnel = $GroupesFonctionnels[$col]
-            
-            # Vérifier si le groupe fonctionnel est membre du groupe DFS
-            if ($Matrice[$dfs] -contains $fonctionnel) {
-                $cell = $Sheet.Cells.Item($row + 2, $col + 2)
-                $cell.Value2 = $permission
-                $cell.Font.Bold = $true
-                $cell.HorizontalAlignment = -4108
-                $cell.Interior.ColorIndex = $couleur
+foreach ($DFS in $GroupesDFS) {
+    $Matrice[$DFS] = @{}
+    
+    # Récupérer les membres du groupe DFS
+    $Membres = Get-ADGroupMember -Identity $DFS | Select-Object -ExpandProperty Name
+    
+    foreach ($Fonctionnel in $GroupesFonctionnels) {
+        if ($Membres -contains $Fonctionnel) {
+            if ($DFS -like "*-RW") {
+                $Matrice[$DFS][$Fonctionnel] = "W"
+            } elseif ($DFS -like "*-R") {
+                $Matrice[$DFS][$Fonctionnel] = "R"
             }
+        } else {
+            $Matrice[$DFS][$Fonctionnel] = ""
         }
     }
-
-    # Figer les volets (ligne 1 et colonne 1)
-    $Sheet.Cells.Item(2, 2).Select() | Out-Null
-    $Excel.ActiveWindow.FreezePanes = $true
-
-    # Bordures sur toute la matrice
-    $lastRow = $GroupesDFS.Count + 1
-    $lastCol = $GroupesFonctionnels.Count + 1
-    $Range = $Sheet.Range($Sheet.Cells.Item(1,1), $Sheet.Cells.Item($lastRow, $lastCol))
-    $Range.Borders.LineStyle = 1
-    $Range.Borders.Weight = 2
-
-    # Sauvegarde
-    $Workbook.SaveAs($ExcelPath)
-    $Workbook.Close($false)
-    $Excel.Quit()
-    [System.Runtime.InteropServices.Marshal]::ReleaseComObject($Excel) | Out-Null
-
-    Write-Host "`n✔ Fichier créé : $ExcelPath" -ForegroundColor Green
-
-} catch {
-    Write-Host "`n✘ ERREUR : " -ForegroundColor Red
-    Write-Host $_.Exception.Message -ForegroundColor Red
-    Write-Host $_.ScriptStackTrace -ForegroundColor Yellow
-    if ($Excel) { $Excel.Quit() }
 }
+
+# Création Excel
+$Excel = New-Object -ComObject Excel.Application
+$Excel.Visible = $false
+$Excel.DisplayAlerts = $false
+
+$Workbook = $Excel.Workbooks.Add()
+$Sheet = $Workbook.Worksheets.Item(1)
+$Sheet.Name = "Matrice Droits"
+
+# En-tête : Groupes Fonctionnels en ligne 1 à partir de colonne B
+$Col = 2
+foreach ($Fonctionnel in $GroupesFonctionnels) {
+    $Cell = $Sheet.Cells.Item(1, $Col)
+    $Cell.Value2 = $Fonctionnel
+    $Cell.Font.Bold = $true
+    $Cell.Interior.ColorIndex = 37
+    $Cell.Font.ColorIndex = 2
+    $Cell.Orientation = 90
+    $Cell.RowHeight = 120
+    $Col++
+}
+
+# Groupes DFS en colonne A à partir de ligne 2
+$Row = 2
+foreach ($DFS in $GroupesDFS) {
+    $Cell = $Sheet.Cells.Item($Row, 1)
+    $Cell.Value2 = $DFS
+    $Cell.Font.Bold = $true
+    
+    # Couleur selon R ou RW
+    if ($DFS -like "*-RW") {
+        $Cell.Interior.ColorIndex = 44  # Orange
+    } elseif ($DFS -like "*-R") {
+        $Cell.Interior.ColorIndex = 43  # Vert
+    }
+    
+    # Remplissage matrice
+    $Col = 2
+    foreach ($Fonctionnel in $GroupesFonctionnels) {
+        $Valeur = $Matrice[$DFS][$Fonctionnel]
+        $Cell = $Sheet.Cells.Item($Row, $Col)
+        $Cell.Value2 = $Valeur
+        $Cell.HorizontalAlignment = -4108  # Centré
+        
+        if ($Valeur -eq "W") {
+            $Cell.Interior.ColorIndex = 44  # Orange
+            $Cell.Font.Bold = $true
+        } elseif ($Valeur -eq "R") {
+            $Cell.Interior.ColorIndex = 43  # Vert
+            $Cell.Font.Bold = $true
+        }
+        $Col++
+    }
+    $Row++
+}
+
+# Mise en forme
+$Sheet.Columns.AutoFit() | Out-Null
+$Sheet.Cells.Item(1,1).Value2 = "DFS \ Fonctionnel"
+$Sheet.Cells.Item(1,1).Font.Bold = $true
+
+# Figer la première ligne et colonne
+$Sheet.Cells.Item(2,2).Select() | Out-Null
+$Sheet.Application.ActiveWindow.FreezePanes = $true
+
+# Sauvegarde
+$Workbook.SaveAs($ExcelPath)
+$Workbook.Close()
+$Excel.Quit()
+
+Write-Host "`n✔ Fichier créé : $ExcelPath" -ForegroundColor Green
