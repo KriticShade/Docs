@@ -470,3 +470,158 @@ $Workbook.SaveAs($chemin)
 $Excel.Quit()
 
 Write-Host "Fichier sauvegardé : $chemin" -ForegroundColor Green
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+$GroupesDFS = Get-ADGroup -Filter {Name -like "GG_BDX_BNU_CDAD*" -and Description -like "*Groupe Global DFS*"} -Properties Description | 
+    Select-Object Name | Sort-Object Name
+
+$tousLesFonctionnels = @{}
+$relationsDFS = @{}
+
+foreach ($dfs in $GroupesDFS) {
+    $membres = Get-ADGroupMember -Identity $dfs.Name | Where-Object {$_.ObjectClass -eq "group"}
+    foreach ($m in $membres) {
+        $tousLesFonctionnels[$m.Name] = $true
+    }
+    $relationsDFS[$dfs.Name] = $membres | Select-Object -ExpandProperty Name
+}
+
+$fonctionnels = $tousLesFonctionnels.Keys | Sort-Object
+$dfsList = $GroupesDFS.Name
+
+# Créer Excel
+$Excel = New-Object -ComObject Excel.Application
+$Excel.Visible = $false
+$Workbook = $Excel.Workbooks.Add()
+$Sheet = $Workbook.Sheets.Item(1)
+$Sheet.Name = "Matrice DFS"
+
+# Palette de couleurs alternées pour les en-têtes fonctionnels
+$couleurs = @(
+    [long](183 * 65536 + 222 * 256 + 232),  # Bleu
+    [long](216 * 65536 + 228 * 256 + 188),  # Vert
+    [long](252 * 65536 + 213 * 256 + 180),  # Orange
+    [long](230 * 65536 + 184 * 256 + 183),  # Rose
+    [long](204 * 65536 + 192 * 256 + 218)   # Violet
+)
+
+# Couleur gris foncé pour les cellules R/RW
+$couleurRW  = [long](64  * 65536 + 64  * 256 + 64)   # Gris très foncé
+$couleurR   = [long](110 * 65536 + 110 * 256 + 110)  # Gris moyen
+
+# Cellule origine A1
+$cellOrigine = $Sheet.Cells.Item(1, 1)
+$cellOrigine.Value2 = "DFS \ Fonctionnels"
+$cellOrigine.Font.Bold = $true
+$cellOrigine.Font.Size = 10
+$cellOrigine.Interior.Color = [long](64 * 65536 + 64 * 256 + 64)
+$cellOrigine.Font.Color = [long](255 * 65536 + 255 * 256 + 255)  # Texte blanc
+
+# En-têtes fonctionnels ligne 1 (colonne 2+) - verticaux avec couleurs alternées
+$col = 2
+$colorIndex = 0
+foreach ($f in $fonctionnels) {
+    $cell = $Sheet.Cells.Item(1, $col)
+    $cell.Value2 = $f
+    $cell.Font.Bold = $true
+    $cell.Font.Size = 10
+    $cell.Interior.Color = $couleurs[$colorIndex % $couleurs.Count]
+    $cell.Orientation = 90
+    $cell.HorizontalAlignment = -4108  # Center
+    $cell.VerticalAlignment = -4107    # Bottom
+    $col++
+    $colorIndex++
+}
+
+# DFS colonne A + matrice
+$row = 2
+$dfsIndex = 0
+foreach ($dfs in $dfsList) {
+    # Couleur alternée gris/blanc pour colonne DFS
+    $couleurLigne = if ($dfsIndex % 2 -eq 0) { 
+        [long](242 * 65536 + 242 * 256 + 242) 
+    } else { 
+        [long](255 * 65536 + 255 * 256 + 255) 
+    }
+
+    # Cellule DFS
+    $cellDFS = $Sheet.Cells.Item($row, 1)
+    $cellDFS.Value2 = $dfs
+    $cellDFS.Font.Bold = $true
+    $cellDFS.Font.Size = 10
+    $cellDFS.Interior.Color = $couleurLigne
+
+    # Remplir matrice
+    $col = 2
+    foreach ($f in $fonctionnels) {
+        if ($relationsDFS[$dfs] -contains $f) {
+            $cellMatrice = $Sheet.Cells.Item($row, $col)
+            if ($dfs -like "*_RW") {
+                $cellMatrice.Value2 = "RW"
+                $cellMatrice.Interior.Color = $couleurRW
+                $cellMatrice.Font.Color = [long](255 * 65536 + 255 * 256 + 255)  # Blanc
+            } elseif ($dfs -like "*_R") {
+                $cellMatrice.Value2 = "R"
+                $cellMatrice.Interior.Color = $couleurR
+                $cellMatrice.Font.Color = [long](255 * 65536 + 255 * 256 + 255)  # Blanc
+            }
+            $cellMatrice.Font.Bold = $true
+            $cellMatrice.Font.Size = 10
+            $cellMatrice.HorizontalAlignment = -4108  # Center
+        }
+        $col++
+    }
+
+    # Bordures légères sur toute la ligne
+    $rangeLigne = $Sheet.Range($Sheet.Cells.Item($row, 1), $Sheet.Cells.Item($row, $fonctionnels.Count + 1))
+    $rangeLigne.Borders.LineStyle = 1
+    $rangeLigne.Borders.Weight = 1
+
+    $row++
+    $dfsIndex++
+}
+
+# Bordures en-têtes
+$rangeEntete = $Sheet.Range($Sheet.Cells.Item(1, 1), $Sheet.Cells.Item(1, $fonctionnels.Count + 1))
+$rangeEntete.Borders.LineStyle = 1
+$rangeEntete.Borders.Weight = 2
+
+# Hauteur ligne en-tête grande pour texte vertical
+$Sheet.Rows.Item(1).RowHeight = 120
+
+# AutoFit colonne A
+$Sheet.Columns.Item(1).AutoFit() | Out-Null
+
+# Toutes les autres colonnes en largeur minimale uniforme
+for ($c = 2; $c -le ($fonctionnels.Count + 1); $c++) {
+    $Sheet.Columns.Item($c).ColumnWidth = 3
+}
+
+# Hauteur uniforme pour les lignes de données
+for ($r = 2; $r -le ($dfsList.Count + 1); $r++) {
+    $Sheet.Rows.Item($r).RowHeight = 15
+}
+
+# Figer première ligne et colonne
+$Sheet.Application.ActiveWindow.SplitRow = 1
+$Sheet.Application.ActiveWindow.SplitColumn = 1
+$Sheet.Application.ActiveWindow.FreezePanes = $true
+
+$chemin = "$env:USERPROFILE\Desktop\Matrice_DFS_Fonctionnels.xlsx"
+$Workbook.SaveAs($chemin)
+$Excel.Quit()
+
+Write-Host "Fichier sauvegardé : $chemin" -ForegroundColor Green
