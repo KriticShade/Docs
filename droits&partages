@@ -274,3 +274,83 @@ $matrice | Format-Table -AutoSize
 
 
 
+
+
+
+
+
+
+$GroupesDFS = Get-ADGroup -Filter {Name -like "GG_BDX_BNU_CDAD*" -and Description -like "*Groupe Global DFS*"} -Properties Description | 
+    Select-Object Name | Sort-Object Name
+
+# Récupérer tous les groupes fonctionnels uniques
+$tousLesFonctionnels = @{}
+$relationsDFS = @{}
+
+foreach ($dfs in $GroupesDFS) {
+    $membres = Get-ADGroupMember -Identity $dfs.Name | Where-Object {$_.ObjectClass -eq "group"}
+    foreach ($m in $membres) {
+        $tousLesFonctionnels[$m.Name] = $true
+    }
+    $relationsDFS[$dfs.Name] = $membres | Select-Object -ExpandProperty Name
+}
+
+$fonctionnels = $tousLesFonctionnels.Keys | Sort-Object
+$dfsList = $GroupesDFS.Name
+
+# Créer Excel
+$Excel = New-Object -ComObject Excel.Application
+$Excel.Visible = $false
+$Workbook = $Excel.Workbooks.Add()
+$Sheet = $Workbook.Sheets.Item(1)
+$Sheet.Name = "Matrice DFS"
+
+# En-têtes DFS en ligne 1 (à partir de colonne 2)
+$col = 2
+foreach ($dfs in $dfsList) {
+    $Sheet.Cells.Item(1, $col) = $dfs
+    $Sheet.Cells.Item(1, $col).Font.Bold = $true
+    $Sheet.Cells.Item(1, $col).Interior.ColorIndex = 37
+    $Sheet.Cells.Item(1, $col).Orientation = 90
+    $col++
+}
+
+# Groupes fonctionnels en colonne 1 + remplissage matrice
+$row = 2
+foreach ($f in $fonctionnels) {
+    $Sheet.Cells.Item($row, 1) = $f
+    $Sheet.Cells.Item($row, 1).Font.Bold = $true
+    $Sheet.Cells.Item($row, 1).Interior.ColorIndex = 15
+
+    $col = 2
+    foreach ($dfs in $dfsList) {
+        if ($relationsDFS[$dfs] -contains $f) {
+            if ($dfs -like "*_RW") { 
+                $Sheet.Cells.Item($row, $col) = "RW"
+                $Sheet.Cells.Item($row, $col).Interior.Color = 0x00FF00  # Vert
+                $Sheet.Cells.Item($row, $col).Font.Bold = $true
+            }
+            elseif ($dfs -like "*_R") { 
+                $Sheet.Cells.Item($row, $col) = "R"
+                $Sheet.Cells.Item($row, $col).Interior.Color = 0xFFFF00  # Jaune
+                $Sheet.Cells.Item($row, $col).Font.Bold = $true
+            }
+        }
+        $col++
+    }
+    $row++
+}
+
+# Figer la première ligne et colonne
+$Sheet.Application.ActiveWindow.SplitRow = 1
+$Sheet.Application.ActiveWindow.SplitColumn = 1
+$Sheet.Application.ActiveWindow.FreezePanes = $true
+
+# Ajuster largeur colonne fonctionnels
+$Sheet.Columns.Item(1).AutoFit() | Out-Null
+
+$chemin = "$env:USERPROFILE\Desktop\Matrice_DFS_Fonctionnels.xlsx"
+$Workbook.SaveAs($chemin)
+$Excel.Quit()
+
+Write-Host "Fichier sauvegardé : $chemin" -ForegroundColor Green
