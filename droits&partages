@@ -130,3 +130,20 @@ if ($Export -eq "O") {
 | **5** | Affiche un récapitulatif + export CSV optionnel |
 
 > ⚠️ **Pré-requis** : Le compte exécutant le script doit avoir les droits en lecture sur l'AD. Aucun module supplémentaire requis, uniquement le module **ActiveDirectory** natif.
+
+
+
+
+
+
+
+
+
+
+
+Le fichier Excel généré contient **deux onglets** :
+
+- **Matrice des Droits** : tableau croisé avec les groupes fonctionnels `GG_F_CDAD-BDX_*` en lignes et les groupes DFS `GG_BDX_BNU_CDAD_*` en colonnes. Chaque cellule indique **RW** (vert) pour Lecture/Écriture ou **R** (jaune) pour Lecture seule. Les en-têtes sont figés pour faciliter la navigation.
+- **Détail des droits** : liste exhaustive de toutes les associations avec numérotation, pour un usage documentation.
+
+> ⚠️ **Les données sont des exemples fictifs** basés sur vos conventions de nommage. Il vous suffit de modifier le tableau `data` en haut du script avec vos vraies associations issues de l'AD pour régénérer la matrice.
