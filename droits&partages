@@ -1,0 +1,4 @@
+ Je fais une matrice des droits, chaque utilisateurs font partis d'un groupe fonctionnel commançant par le préfixe : 
+GG_F_CDAD-BDX
+Ces groupes sont membre d'autres groupes commençant par : 
+GG_BDX_BNU_CDAD et terminant par -R ou -RW par rapports aux permissions read and write. Peux tu me faire avec une commande powershell dans lequel je n'ai pas le droit d'installer de nouveau module mais j'ai droit au commande ad, de me lister pour une utilisateur les groupes dans lequel il fait parti et les droits qu'il pourrais avoir
