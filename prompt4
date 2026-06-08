@@ -1,2 +1,311 @@
 Alignement en rotation dans le sens inverse des aiguilles d'une montre pour la première ligne pour que ce soit plus lisible et je voudrais une couleur un peu stylé par groupe en fonctionne de comment ça commence . (exemple : groupe- = une couleur, projet- = une autre couleur,…)
 Pour les cases R et RW je veux que ce soit 2 couleurs de gris différentesLa premiere ligne est en taille de texte 10 et en gras sauf  la toute première cellule qui est en taille 11. La première colonne est en taille de texte 11 et pour le reste du tableau 10 mais gras
+
+
+```powershell
+# ============================================================
+# MATRICE CROISÉE : Utilisateurs x Groupes DFS (via Fonctionnels)
+# ============================================================
+
+$GroupesDFS = Get-ADGroup -Filter {Name -like "GG_BDX_BNU_CDAD*"} -Properties Members | Sort-Object Name
+$GroupesFonctionnels = Get-ADGroup -Filter {Name -like "GG_F_CDAD-BDX*"} -Properties Members | Sort-Object Name
+
+$relationsDFS = @{}
+foreach ($dfs in $GroupesDFS) {
+    $membres = Get-ADGroupMember -Identity $dfs.Name | Where-Object {$_.ObjectClass -eq "group" -and $_.Name -like "GG_F_CDAD-BDX*"}
+    $relationsDFS[$dfs.Name] = $membres | Select-Object -ExpandProperty Name
+}
+
+$relationsFont = @{}
+foreach ($f in $GroupesFonctionnels) {
+    $membres = Get-ADGroupMember -Identity $f.Name -Recursive | Where-Object {$_.ObjectClass -eq "user"}
+    $relationsFont[$f.Name] = $membres | Select-Object -ExpandProperty SamAccountName
+}
+
+$tousLesUsers = @{}
+foreach ($f in $GroupesFonctionnels) {
+    if ($relationsFont[$f.Name]) {
+        foreach ($u in $relationsFont[$f.Name]) { $tousLesUsers[$u] = $true }
+    }
+}
+$usersList    = $tousLesUsers.Keys | Sort-Object
+$dfsList      = $GroupesDFS.Name
+$fonctionnels = $GroupesFonctionnels.Name
+
+# Colonnes DFS actives
+$dfsActifs = @()
+foreach ($dfs in $dfsList) {
+    $aUnDroit = $false
+    foreach ($user in $usersList) {
+        foreach ($f in $relationsDFS[$dfs]) {
+            if ($relationsFont[$f] -contains $user) { $aUnDroit = $true; break }
+        }
+        if ($aUnDroit) { break }
+    }
+    if ($aUnDroit) { $dfsActifs += $dfs }
+}
+
+# ============================================================
+# COULEURS PAR PREFIXE DE GROUPE (après suppression GG_F_CDAD-BDX-)
+# ============================================================
+function Get-CouleurPrefixe {
+    param($nomGroupe)
+    # On enlève le préfixe commun pour récupérer le nom court
+    $nomCourt = $nomGroupe -replace "^GG_F_CDAD-BDX-", ""
+    
+    # On extrait le premier mot avant le tiret
+    $prefixe = ($nomCourt -split "-")[0].ToLower()
+
+    switch ($prefixe) {
+        "groupe"   { return [long](173 * 65536 + 216 * 256 + 230) }  # Bleu clair
+        "projet"   { return [long]( 80 * 65536 + 160 * 256 + 120) }  # Vert
+        "dir"      { return [long](200 * 65536 +  80 * 256 +  80) }  # Rouge/corail
+        "daf"      { return [long](150 * 65536 +  90 * 256 + 200) }  # Violet
+        "drh"      { return [long](240 * 65536 + 160 * 256 +  60) }  # Orange
+        "com"      { return [long]( 60 * 65536 + 180 * 256 + 200) }  # Cyan
+        "tech"     { return [long](100 * 65536 + 140 * 256 + 200) }  # Bleu acier
+        "inf"      { return [long](220 * 65536 + 120 * 256 + 170) }  # Rose
+        "sec"      { return [long]( 80 * 65536 + 120 * 256 +  80) }  # Vert foncé
+        "log"      { return [long](200 * 65536 + 150 * 256 +  80) }  # Jaune/doré
+        default    { return [long]( 44 * 65536 + 130 * 256 + 185) }  # Bleu par défaut
+    }
+}
+
+# Couleurs DFS sans préfixe - même logique sur ce qui reste
+function Get-CouleurDFS {
+    param($nomDFS)
+    $nomCourt = $nomDFS -replace "^GG_BDX_BNU_CDAD[-_]?", ""
+    $prefixe  = ($nomCourt -split "[-_]")[0].ToLower()
+
+    switch ($prefixe) {
+        "groupe"   { return [long](173 * 65536 + 216 * 256 + 230) }
+        "projet"   { return [long]( 80 * 65536 + 160 * 256 + 120) }
+        "dir"      { return [long](200 * 65536 +  80 * 256 +  80) }
+        "daf"      { return [long](150 * 65536 +  90 * 256 + 200) }
+        "drh"      { return [long](240 * 65536 + 160 * 256 +  60) }
+        "com"      { return [long]( 60 * 65536 + 180 * 256 + 200) }
+        "tech"     { return [long](100 * 65536 + 140 * 256 + 200) }
+        "inf"      { return [long](220 * 65536 + 120 * 256 + 170) }
+        "sec"      { return [long]( 80 * 65536 + 120 * 256 +  80) }
+        "log"      { return [long](200 * 65536 + 150 * 256 +  80) }
+        default    { return [long]( 44 * 65536 + 130 * 256 + 185) }
+    }
+}
+
+# ============================================================
+# COULEURS FIXES
+# ============================================================
+$couleurRW   = [long](130 * 65536 + 130 * 256 + 130)  # Gris moyen foncé pour RW
+$couleurR    = [long](200 * 65536 + 200 * 256 + 200)  # Gris clair pour R
+$blanc       = [long](255 * 65536 + 255 * 256 + 255)
+$noir        = [long](  0 * 65536 +   0 * 256 +   0)
+$grisLigne   = [long](235 * 65536 + 235 * 256 + 235)
+$grisEntete  = [long]( 40 * 65536 +  40 * 256 +  40)
+
+# ============================================================
+# FONCTION BORDURES NOIRES FINES
+# ============================================================
+function Set-Borders {
+    param($range)
+    foreach ($edge in @(7,8,9,10,11,12)) {
+        $range.Borders.Item($edge).LineStyle = 1
+        $range.Borders.Item($edge).Weight    = 2
+        $range.Borders.Item($edge).Color     = $noir
+    }
+}
+
+# ============================================================
+# EXCEL
+# ============================================================
+$Excel    = New-Object -ComObject Excel.Application
+$Excel.Visible = $false
+$Workbook = $Excel.Workbooks.Add()
+
+while ($Workbook.Sheets.Count -gt 1) { $Workbook.Sheets.Item($Workbook.Sheets.Count).Delete() }
+
+# ============================================================
+# FEUILLE 1 : Droits Utilisateurs x DFS
+# ============================================================
+$Sheet1 = $Workbook.Sheets.Item(1)
+$Sheet1.Name = "Droits Utilisateurs"
+
+# Cellule A1
+$c1 = $Sheet1.Cells.Item(1,1)
+$c1.Value2 = "Utilisateur \ DFS"
+$c1.Font.Bold = $true
+$c1.Font.Size = 11
+$c1.Interior.Color = $grisEntete
+$c1.Font.Color = $blanc
+
+# En-têtes DFS actifs
+$col = 2
+foreach ($dfs in $dfsActifs) {
+    $nomCourt = $dfs -replace "^GG_BDX_BNU_CDAD[-_]?", ""
+    $cell = $Sheet1.Cells.Item(1, $col)
+    $cell.Value2 = $nomCourt
+    $cell.Font.Bold = $true
+    $cell.Font.Size = 10
+    $cell.Font.Color = $blanc
+    $cell.Interior.Color = Get-CouleurDFS $dfs
+    $cell.Orientation = -45   # Sens inverse aiguilles montre
+    $cell.HorizontalAlignment = -4108
+    $cell.VerticalAlignment   = -4107
+    $col++
+}
+
+# Lignes utilisateurs
+$row = 2
+$userIndex = 0
+foreach ($user in $usersList) {
+    $couleurLigne = if ($userIndex % 2 -eq 0) { $grisLigne } else { $blanc }
+
+    $cellUser = $Sheet1.Cells.Item($row,1)
+    $cellUser.Value2 = $user
+    $cellUser.Font.Bold = $false
+    $cellUser.Font.Size = 11
+    $cellUser.Interior.Color = $couleurLigne
+
+    $col = 2
+    foreach ($dfs in $dfsActifs) {
+        $droitMax = ""
+        foreach ($f in $relationsDFS[$dfs]) {
+            if ($relationsFont[$f] -contains $user) {
+                if ($dfs -like "*-RW" -or $dfs -like "*_RW") { $droitMax = "RW"; break }
+                elseif ($droitMax -ne "RW") { $droitMax = "R" }
+            }
+        }
+        $cellM = $Sheet1.Cells.Item($row, $col)
+        $cellM.Font.Size = 10
+        $cellM.Font.Bold = $true
+        if ($droitMax -ne "") {
+            $cellM.Value2 = $droitMax
+            $cellM.Font.Color = $blanc
+            $cellM.HorizontalAlignment = -4108
+            $cellM.Interior.Color = if ($droitMax -eq "RW") { $couleurRW } else { $couleurR }
+        } else {
+            $cellM.Interior.Color = $couleurLigne
+        }
+        $col++
+    }
+
+    $rangeLigne = $Sheet1.Range($Sheet1.Cells.Item($row,1), $Sheet1.Cells.Item($row, $dfsActifs.Count+1))
+    Set-Borders $rangeLigne
+    $row++
+    $userIndex++
+}
+
+Set-Borders $Sheet1.Range($Sheet1.Cells.Item(1,1), $Sheet1.Cells.Item(1, $dfsActifs.Count+1))
+
+$Sheet1.Rows.Item(1).RowHeight = 130
+$Sheet1.Columns.Item(1).AutoFit() | Out-Null
+for ($c = 2; $c -le ($dfsActifs.Count + 1); $c++) { $Sheet1.Columns.Item($c).ColumnWidth = 5 }
+for ($r = 2; $r -le ($usersList.Count + 1); $r++) { $Sheet1.Rows.Item($r).RowHeight = 16 }
+
+$Sheet1.Application.ActiveWindow.SplitRow    = 1
+$Sheet1.Application.ActiveWindow.SplitColumn = 1
+$Sheet1.Application.ActiveWindow.FreezePanes = $true
+
+# ============================================================
+# FEUILLE 2 : Matrice DFS x Fonctionnels
+# ============================================================
+$Sheet2 = $Workbook.Sheets.Add()
+$Sheet2.Name = "Matrice DFS Fonctionnels"
+
+# Cellule A1
+$c2 = $Sheet2.Cells.Item(1,1)
+$c2.Value2 = "DFS \ Fonctionnels"
+$c2.Font.Bold = $true
+$c2.Font.Size = 11
+$c2.Interior.Color = $grisEntete
+$c2.Font.Color = $blanc
+
+# En-têtes Fonctionnels
+$col = 2
+foreach ($f in $fonctionnels) {
+    $cell = $Sheet2.Cells.Item(1, $col)
+    $cell.Value2 = $f
+    $cell.Font.Bold = $true
+    $cell.Font.Size = 10
+    $cell.Font.Color = $blanc
+    $cell.Interior.Color = Get-CouleurPrefixe $f
+    $cell.Orientation = -45   # Sens inverse aiguilles montre
+    $cell.HorizontalAlignment = -4108
+    $cell.VerticalAlignment   = -4107
+    $col++
+}
+
+# Lignes DFS
+$row = 2
+$dfsIndex = 0
+foreach ($dfs in $dfsList) {
+    $nomCourt = $dfs -replace "^GG_BDX_BNU_CDAD[-_]?", ""
+    $couleurLigne = if ($dfsIndex % 2 -eq 0) { $grisLigne } else { $blanc }
+
+    $cellDFS = $Sheet2.Cells.Item($row,1)
+    $cellDFS.Value2 = $nomCourt
+    $cellDFS.Font.Bold = $false
+    $cellDFS.Font.Size = 11
+    $cellDFS.Interior.Color = $couleurLigne
+
+    $col = 2
+    foreach ($f in $fonctionnels) {
+        $cellM = $Sheet2.Cells.Item($row, $col)
+        $cellM.Font.Size = 10
+        $cellM.Font.Bold = $true
+        $cellM.Interior.Color = $couleurLigne
+        if ($relationsDFS[$dfs] -contains $f) {
+            if ($dfs -like "*-RW" -or $dfs -like "*_RW") {
+                $cellM.Value2 = "RW"
+                $cellM.Interior.Color = $couleurRW
+            } elseif ($dfs -like "*-R" -or $dfs -like "*_R") {
+                $cellM.Value2 = "R"
+                $cellM.Interior.Color = $couleurR
+            }
+            $cellM.Font.Color = $blanc
+            $cellM.HorizontalAlignment = -4108
+        }
+        $col++
+    }
+
+    $rangeLigne = $Sheet2.Range($Sheet2.Cells.Item($row,1), $Sheet2.Cells.Item($row, $fonctionnels.Count+1))
+    Set-Borders $rangeLigne
+    $row++
+    $dfsIndex++
+}
+
+Set-Borders $Sheet2.Range($Sheet2.Cells.Item(1,1), $Sheet2.Cells.Item(1, $fonctionnels.Count+1))
+
+$Sheet2.Rows.Item(1).RowHeight = 130
+$Sheet2.Columns.Item(1).AutoFit() | Out-Null
+for ($c = 2; $c -le ($fonctionnels.Count + 1); $c++) { $Sheet2.Columns.Item($c).ColumnWidth = 5 }
+for ($r = 2; $r -le ($dfsList.Count + 1); $r++) { $Sheet2.Rows.Item($r).RowHeight = 16 }
+
+$Sheet2.Application.ActiveWindow.SplitRow    = 1
+$Sheet2.Application.ActiveWindow.SplitColumn = 1
+$Sheet2.Application.ActiveWindow.FreezePanes = $true
+
+# ============================================================
+# SAUVEGARDE
+# ============================================================
+$chemin = "$env:USERPROFILE\Desktop\Matrice_Complete.xlsx"
+$Workbook.SaveAs($chemin)
+$Excel.Quit()
+
+Write-Host "Fichier sauvegarde : $chemin" -ForegroundColor Green
+```
+
+---
+
+**Résumé des changements :**
+
+| Paramètre | Détail |
+|---|---|
+| **Rotation texte** | -45° (sens inverse aiguilles montre) |
+| **Couleurs par préfixe** | `groupe` `projet` `dir` `daf` `drh` `com` `tech`... chacun sa couleur |
+| **R** | Gris clair `(200,200,200)` |
+| **RW** | Gris foncé `(130,130,130)` |
+| **Taille en-tête** | 10 gras sauf A1 = 11 |
+| **Taille col A** | 11 non gras |
+| **Reste tableau** | 10 gras |
+
+> ⚠️ Adapte les prefixes dans `Get-CouleurPrefixe` et `Get-CouleurDFS` selon tes vrais noms de groupes !
