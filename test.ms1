@@ -407,7 +407,7 @@ $Sheet1.Application.ActiveWindow.SplitRow    = 1
 $Sheet1.Application.ActiveWindow.SplitColumn = 1
 $Sheet1.Application.ActiveWindow.FreezePanes = $true
 
-# ============================================================
+====
 # FEUILLE 3 : Matrice DFS x Fonctionnels
 # ============================================================
 $Sheet2 = $wb.Sheets.Add()
@@ -488,4 +488,26 @@ foreach ($dfs in $dfsList) {
 $maxLenFont = ($fonctionnels | ForEach-Object { ($_ -replace "^GG_F_CDAD-BDX[-_]?","").Length } | Measure-Object -Maximum).Maximum
 $Sheet2.Rows.Item(1).RowHeight = $maxLenFont * 5.5
 $Sheet2.Columns.Item(1).AutoFit() | Out-Null
-for ($c = 2; $c -le ($fonctionnels.Count + 1); $c++) { $Sheet2.Columns.It
+for ($c = 2; $c -le ($fonctionnels.Count + 1); $c++) { $Sheet2.Columns.Item($c).ColumnWidth = 4.5 }
+for ($r = 2; $r -le ($dfsList.Count + 1); $r++) { $Sheet2.Rows.Item($r).RowHeight = 16 }
+$Sheet2.Application.ActiveWindow.SplitRow    = 1
+$Sheet2.Application.ActiveWindow.SplitColumn = 1
+$Sheet2.Application.ActiveWindow.FreezePanes = $true
+
+# Mettre Matrice Droits en premier
+$ws.Move($wb.Sheets.Item(1))
+
+# ============================================================
+# SAUVEGARDE
+# ============================================================
+$fichier = "C:\Users\m.merme\Downloads\Matrice_Complete.xlsx"
+$wb.SaveAs($fichier)
+$wb.Close()
+$excel.Quit()
+[System.Runtime.InteropServices.Marshal]::ReleaseComObject($excel) | Out-Null
+
+Write-Host "" 
+Write-Host "  Export termine : $fichier"                               -ForegroundColor Green
+Write-Host "  Actifs      : $($utilisateursActifs.Count) utilisateurs" -ForegroundColor White
+Write-Host "  A supprimer : $($utilisateursSuppr.Count)"               -ForegroundColor Red
+Write-Host "  A ajouter   : $($aAjouter.Count)"                        -ForegroundColor Blue
