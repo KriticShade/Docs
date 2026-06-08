@@ -280,7 +280,7 @@ $ws.Application.ActiveWindow.FreezePanes = $true
 # ============================================================
 # SAUVEGARDE
 # ============================================================
-$fichier = "C:\Users\m.merme\Downloads\matrice_droits.xlsx"
+$fichier = "C:\Users\*\Downloads\matrice_droits.xlsx"
 $wb.SaveAs($fichier)
 $wb.Close()
 $excel.Quit()
