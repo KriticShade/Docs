@@ -1,7 +1,3 @@
-Alignement en rotation dans le sens inverse des aiguilles d'une montre pour la première ligne pour que ce soit plus lisible et je voudrais une couleur un peu stylé par groupe en fonctionne de comment ça commence . (exemple : groupe- = une couleur, projet- = une autre couleur,…)
-Pour les cases R et RW je veux que ce soit 2 couleurs de gris différentesLa premiere ligne est en taille de texte 10 et en gras sauf  la toute première cellule qui est en taille 11. La première colonne est en taille de texte 11 et pour le reste du tableau 10 mais gras
-
-
 ```powershell
 # ============================================================
 # MATRICE CROISÉE : Utilisateurs x Groupes DFS (via Fonctionnels)
@@ -32,7 +28,9 @@ $usersList    = $tousLesUsers.Keys | Sort-Object
 $dfsList      = $GroupesDFS.Name
 $fonctionnels = $GroupesFonctionnels.Name
 
-# Colonnes DFS actives
+# ============================================================
+# COLONNES DFS ACTIVES
+# ============================================================
 $dfsActifs = @()
 foreach ($dfs in $dfsList) {
     $aUnDroit = $false
@@ -46,61 +44,64 @@ foreach ($dfs in $dfsList) {
 }
 
 # ============================================================
-# COULEURS PAR PREFIXE DE GROUPE (après suppression GG_F_CDAD-BDX-)
+# COULEURS PAR GROUPE (basé sur ce qui suit CDAD dans le nom)
 # ============================================================
-function Get-CouleurPrefixe {
-    param($nomGroupe)
-    # On enlève le préfixe commun pour récupérer le nom court
-    $nomCourt = $nomGroupe -replace "^GG_F_CDAD-BDX-", ""
-    
-    # On extrait le premier mot avant le tiret
-    $prefixe = ($nomCourt -split "-")[0].ToLower()
-
-    switch ($prefixe) {
-        "groupe"   { return [long](173 * 65536 + 216 * 256 + 230) }  # Bleu clair
-        "projet"   { return [long]( 80 * 65536 + 160 * 256 + 120) }  # Vert
-        "dir"      { return [long](200 * 65536 +  80 * 256 +  80) }  # Rouge/corail
-        "daf"      { return [long](150 * 65536 +  90 * 256 + 200) }  # Violet
-        "drh"      { return [long](240 * 65536 + 160 * 256 +  60) }  # Orange
-        "com"      { return [long]( 60 * 65536 + 180 * 256 + 200) }  # Cyan
-        "tech"     { return [long](100 * 65536 + 140 * 256 + 200) }  # Bleu acier
-        "inf"      { return [long](220 * 65536 + 120 * 256 + 170) }  # Rose
-        "sec"      { return [long]( 80 * 65536 + 120 * 256 +  80) }  # Vert foncé
-        "log"      { return [long](200 * 65536 + 150 * 256 +  80) }  # Jaune/doré
-        default    { return [long]( 44 * 65536 + 130 * 256 + 185) }  # Bleu par défaut
-    }
+function Get-GroupeKey {
+    param($nom, $prefixeASupprimer)
+    $court = $nom -replace $prefixeASupprimer, ""
+    # Extraire le premier segment après le préfixe (avant le prochain - ou _)
+    if ($court -match "^[-_]?([^-_]+)") { return $Matches[1] }
+    return $court
 }
 
-# Couleurs DFS sans préfixe - même logique sur ce qui reste
-function Get-CouleurDFS {
-    param($nomDFS)
-    $nomCourt = $nomDFS -replace "^GG_BDX_BNU_CDAD[-_]?", ""
-    $prefixe  = ($nomCourt -split "[-_]")[0].ToLower()
+# Palette de couleurs modernes par groupe - séries distinctes
+$palettesGroupes = @(
+    # Série Bleu
+    @{ entete = [long](  30*65536 + 100*256 + 180); alt1 = [long]( 210*65536 + 228*256 + 245); alt2 = [long]( 235*65536 + 244*256 + 252) },
+    # Série Vert
+    @{ entete = [long](  60*65536 + 140*256 +  80); alt1 = [long]( 210*65536 + 235*256 + 210); alt2 = [long]( 235*65536 + 248*256 + 235) },
+    # Série Orange
+    @{ entete = [long]( 200*65536 + 100*256 +  30); alt1 = [long]( 250*65536 + 225*256 + 195); alt2 = [long]( 253*65536 + 242*256 + 228) },
+    # Série Violet
+    @{ entete = [long]( 110*65536 +  60*256 + 160); alt1 = [long]( 225*65536 + 210*256 + 240); alt2 = [long]( 242*65536 + 232*256 + 250) },
+    # Série Rose
+    @{ entete = [long]( 190*65536 +  60*256 + 100); alt1 = [long]( 245*65536 + 210*256 + 220); alt2 = [long]( 252*65536 + 235*256 + 240) },
+    # Série Cyan
+    @{ entete = [long](  20*65536 + 140*256 + 160); alt1 = [long]( 200*65536 + 235*256 + 240); alt2 = [long]( 228*65536 + 246*256 + 248) },
+    # Série Bordeaux
+    @{ entete = [long]( 150*65536 +  30*256 +  60); alt1 = [long]( 240*65536 + 200*256 + 210); alt2 = [long]( 250*65536 + 228*256 + 232) },
+    # Série Kaki
+    @{ entete = [long]( 100*65536 + 120*256 +  40); alt1 = [long]( 220*65536 + 232*256 + 195); alt2 = [long]( 238*65536 + 245*256 + 220) }
+)
 
-    switch ($prefixe) {
-        "groupe"   { return [long](173 * 65536 + 216 * 256 + 230) }
-        "projet"   { return [long]( 80 * 65536 + 160 * 256 + 120) }
-        "dir"      { return [long](200 * 65536 +  80 * 256 +  80) }
-        "daf"      { return [long](150 * 65536 +  90 * 256 + 200) }
-        "drh"      { return [long](240 * 65536 + 160 * 256 +  60) }
-        "com"      { return [long]( 60 * 65536 + 180 * 256 + 200) }
-        "tech"     { return [long](100 * 65536 + 140 * 256 + 200) }
-        "inf"      { return [long](220 * 65536 + 120 * 256 + 170) }
-        "sec"      { return [long]( 80 * 65536 + 120 * 256 +  80) }
-        "log"      { return [long](200 * 65536 + 150 * 256 +  80) }
-        default    { return [long]( 44 * 65536 + 130 * 256 + 185) }
+function Get-CouleurGroupes {
+    param($liste, $prefixeRegex)
+    $groupeIndex = @{}
+    $idx = 0
+    $map = @{}
+    foreach ($nom in $liste) {
+        $key = Get-GroupeKey -nom $nom -prefixeASupprimer $prefixeRegex
+        if (-not $groupeIndex.ContainsKey($key)) {
+            $groupeIndex[$key] = $idx
+            $idx++
+        }
+        $map[$nom] = $groupeIndex[$key]
     }
+    return $map
 }
 
-# ============================================================
-# COULEURS FIXES
-# ============================================================
-$couleurRW   = [long](130 * 65536 + 130 * 256 + 130)  # Gris moyen foncé pour RW
-$couleurR    = [long](200 * 65536 + 200 * 256 + 200)  # Gris clair pour R
-$blanc       = [long](255 * 65536 + 255 * 256 + 255)
-$noir        = [long](  0 * 65536 +   0 * 256 +   0)
-$grisLigne   = [long](235 * 65536 + 235 * 256 + 235)
-$grisEntete  = [long]( 40 * 65536 +  40 * 256 +  40)
+$mapCouleurDFS  = Get-CouleurGroupes -liste $dfsActifs   -prefixeRegex "^GG_BDX_BNU_CDAD[-_]?"
+$mapCouleurFont = Get-CouleurGroupes -liste $fonctionnels -prefixeRegex "^GG_F_CDAD-BDX[-_]?"
+$mapCouleurDFSAll = Get-CouleurGroupes -liste $dfsList    -prefixeRegex "^GG_BDX_BNU_CDAD[-_]?"
+
+# Couleurs fixes
+$blanc       = [long](255*65536 + 255*256 + 255)
+$noir        = [long](  0*65536 +   0*256 +   0)
+$grisEntete  = [long]( 40*65536 +  40*256 +  40)
+$grisLigne1  = [long](235*65536 + 235*256 + 235)
+$grisLigne2  = [long](255*65536 + 255*256 + 255)
+$couleurRW   = [long]( 90*65536 +  90*256 +  90)   # Gris foncé pour RW
+$couleurR    = [long](170*65536 + 170*256 + 170)   # Gris clair pour R
 
 # ============================================================
 # FONCTION BORDURES NOIRES FINES
@@ -117,14 +118,13 @@ function Set-Borders {
 # ============================================================
 # EXCEL
 # ============================================================
-$Excel    = New-Object -ComObject Excel.Application
+$Excel = New-Object -ComObject Excel.Application
 $Excel.Visible = $false
 $Workbook = $Excel.Workbooks.Add()
-
 while ($Workbook.Sheets.Count -gt 1) { $Workbook.Sheets.Item($Workbook.Sheets.Count).Delete() }
 
 # ============================================================
-# FEUILLE 1 : Droits Utilisateurs x DFS
+# FEUILLE 1 : Droits Utilisateurs
 # ============================================================
 $Sheet1 = $Workbook.Sheets.Item(1)
 $Sheet1.Name = "Droits Utilisateurs"
@@ -141,23 +141,29 @@ $c1.Font.Color = $blanc
 $col = 2
 foreach ($dfs in $dfsActifs) {
     $nomCourt = $dfs -replace "^GG_BDX_BNU_CDAD[-_]?", ""
+    $paletteIdx = $mapCouleurDFS[$dfs]
+    $palette = $palettesGroupes[$paletteIdx % $palettesGroupes.Count]
+
     $cell = $Sheet1.Cells.Item(1, $col)
     $cell.Value2 = $nomCourt
     $cell.Font.Bold = $true
     $cell.Font.Size = 10
     $cell.Font.Color = $blanc
-    $cell.Interior.Color = Get-CouleurDFS $dfs
-    $cell.Orientation = -45   # Sens inverse aiguilles montre
+    $cell.Interior.Color = $palette.entete
+    $cell.Orientation = -4171   # Sens inverse aiguilles montre (bas vers haut)
     $cell.HorizontalAlignment = -4108
     $cell.VerticalAlignment   = -4107
     $col++
 }
 
+# Bordures entête
+Set-Borders $Sheet1.Range($Sheet1.Cells.Item(1,1), $Sheet1.Cells.Item(1, $dfsActifs.Count+1))
+
 # Lignes utilisateurs
 $row = 2
 $userIndex = 0
 foreach ($user in $usersList) {
-    $couleurLigne = if ($userIndex % 2 -eq 0) { $grisLigne } else { $blanc }
+    $couleurLigne = if ($userIndex % 2 -eq 0) { $grisLigne1 } else { $grisLigne2 }
 
     $cellUser = $Sheet1.Cells.Item($row,1)
     $cellUser.Value2 = $user
@@ -167,6 +173,10 @@ foreach ($user in $usersList) {
 
     $col = 2
     foreach ($dfs in $dfsActifs) {
+        $paletteIdx = $mapCouleurDFS[$dfs]
+        $palette = $palettesGroupes[$paletteIdx % $palettesGroupes.Count]
+        $fondVide = if ($userIndex % 2 -eq 0) { $palette.alt1 } else { $palette.alt2 }
+
         $droitMax = ""
         foreach ($f in $relationsDFS[$dfs]) {
             if ($relationsFont[$f] -contains $user) {
@@ -174,33 +184,31 @@ foreach ($user in $usersList) {
                 elseif ($droitMax -ne "RW") { $droitMax = "R" }
             }
         }
+
         $cellM = $Sheet1.Cells.Item($row, $col)
         $cellM.Font.Size = 10
         $cellM.Font.Bold = $true
+        $cellM.HorizontalAlignment = -4108
+
         if ($droitMax -ne "") {
             $cellM.Value2 = $droitMax
             $cellM.Font.Color = $blanc
-            $cellM.HorizontalAlignment = -4108
             $cellM.Interior.Color = if ($droitMax -eq "RW") { $couleurRW } else { $couleurR }
         } else {
-            $cellM.Interior.Color = $couleurLigne
+            $cellM.Interior.Color = $fondVide
         }
         $col++
     }
 
-    $rangeLigne = $Sheet1.Range($Sheet1.Cells.Item($row,1), $Sheet1.Cells.Item($row, $dfsActifs.Count+1))
-    Set-Borders $rangeLigne
+    Set-Borders $Sheet1.Range($Sheet1.Cells.Item($row,1), $Sheet1.Cells.Item($row, $dfsActifs.Count+1))
     $row++
     $userIndex++
 }
 
-Set-Borders $Sheet1.Range($Sheet1.Cells.Item(1,1), $Sheet1.Cells.Item(1, $dfsActifs.Count+1))
-
 $Sheet1.Rows.Item(1).RowHeight = 130
 $Sheet1.Columns.Item(1).AutoFit() | Out-Null
-for ($c = 2; $c -le ($dfsActifs.Count + 1); $c++) { $Sheet1.Columns.Item($c).ColumnWidth = 5 }
+for ($c = 2; $c -le ($dfsActifs.Count + 1); $c++) { $Sheet1.Columns.Item($c).ColumnWidth = 4.5 }
 for ($r = 2; $r -le ($usersList.Count + 1); $r++) { $Sheet1.Rows.Item($r).RowHeight = 16 }
-
 $Sheet1.Application.ActiveWindow.SplitRow    = 1
 $Sheet1.Application.ActiveWindow.SplitColumn = 1
 $Sheet1.Application.ActiveWindow.FreezePanes = $true
@@ -222,24 +230,32 @@ $c2.Font.Color = $blanc
 # En-têtes Fonctionnels
 $col = 2
 foreach ($f in $fonctionnels) {
+    $nomCourt = $f -replace "^GG_F_CDAD-BDX[-_]?", ""
+    $paletteIdx = $mapCouleurFont[$f]
+    $palette = $palettesGroupes[$paletteIdx % $palettesGroupes.Count]
+
     $cell = $Sheet2.Cells.Item(1, $col)
-    $cell.Value2 = $f
+    $cell.Value2 = $nomCourt
     $cell.Font.Bold = $true
     $cell.Font.Size = 10
     $cell.Font.Color = $blanc
-    $cell.Interior.Color = Get-CouleurPrefixe $f
-    $cell.Orientation = -45   # Sens inverse aiguilles montre
+    $cell.Interior.Color = $palette.entete
+    $cell.Orientation = -4171
     $cell.HorizontalAlignment = -4108
     $cell.VerticalAlignment   = -4107
     $col++
 }
+
+Set-Borders $Sheet2.Range($Sheet2.Cells.Item(1,1), $Sheet2.Cells.Item(1, $fonctionnels.Count+1))
 
 # Lignes DFS
 $row = 2
 $dfsIndex = 0
 foreach ($dfs in $dfsList) {
     $nomCourt = $dfs -replace "^GG_BDX_BNU_CDAD[-_]?", ""
-    $couleurLigne = if ($dfsIndex % 2 -eq 0) { $grisLigne } else { $blanc }
+    $paletteIdxLigne = $mapCouleurDFSAll[$dfs]
+    $paletteLigne = $palettesGroupes[$paletteIdxLigne % $palettesGroupes.Count]
+    $couleurLigne = if ($dfsIndex % 2 -eq 0) { $paletteLigne.alt1 } else { $paletteLigne.alt2 }
 
     $cellDFS = $Sheet2.Cells.Item($row,1)
     $cellDFS.Value2 = $nomCourt
@@ -249,37 +265,39 @@ foreach ($dfs in $dfsList) {
 
     $col = 2
     foreach ($f in $fonctionnels) {
+        $paletteIdxCol = $mapCouleurFont[$f]
+        $paletteCol = $palettesGroupes[$paletteIdxCol % $palettesGroupes.Count]
+        $fondVide = if ($dfsIndex % 2 -eq 0) { $paletteCol.alt1 } else { $paletteCol.alt2 }
+
         $cellM = $Sheet2.Cells.Item($row, $col)
         $cellM.Font.Size = 10
         $cellM.Font.Bold = $true
-        $cellM.Interior.Color = $couleurLigne
+        $cellM.HorizontalAlignment = -4108
+        $cellM.Interior.Color = $fondVide
+
         if ($relationsDFS[$dfs] -contains $f) {
             if ($dfs -like "*-RW" -or $dfs -like "*_RW") {
                 $cellM.Value2 = "RW"
                 $cellM.Interior.Color = $couleurRW
+                $cellM.Font.Color = $blanc
             } elseif ($dfs -like "*-R" -or $dfs -like "*_R") {
                 $cellM.Value2 = "R"
                 $cellM.Interior.Color = $couleurR
+                $cellM.Font.Color = $blanc
             }
-            $cellM.Font.Color = $blanc
-            $cellM.HorizontalAlignment = -4108
         }
         $col++
     }
 
-    $rangeLigne = $Sheet2.Range($Sheet2.Cells.Item($row,1), $Sheet2.Cells.Item($row, $fonctionnels.Count+1))
-    Set-Borders $rangeLigne
+    Set-Borders $Sheet2.Range($Sheet2.Cells.Item($row,1), $Sheet2.Cells.Item($row, $fonctionnels.Count+1))
     $row++
     $dfsIndex++
 }
 
-Set-Borders $Sheet2.Range($Sheet2.Cells.Item(1,1), $Sheet2.Cells.Item(1, $fonctionnels.Count+1))
-
 $Sheet2.Rows.Item(1).RowHeight = 130
 $Sheet2.Columns.Item(1).AutoFit() | Out-Null
-for ($c = 2; $c -le ($fonctionnels.Count + 1); $c++) { $Sheet2.Columns.Item($c).ColumnWidth = 5 }
+for ($c = 2; $c -le ($fonctionnels.Count + 1); $c++) { $Sheet2.Columns.Item($c).ColumnWidth = 4.5 }
 for ($r = 2; $r -le ($dfsList.Count + 1); $r++) { $Sheet2.Rows.Item($r).RowHeight = 16 }
-
 $Sheet2.Application.ActiveWindow.SplitRow    = 1
 $Sheet2.Application.ActiveWindow.SplitColumn = 1
 $Sheet2.Application.ActiveWindow.FreezePanes = $true
@@ -290,7 +308,6 @@ $Sheet2.Application.ActiveWindow.FreezePanes = $true
 $chemin = "$env:USERPROFILE\Desktop\Matrice_Complete.xlsx"
 $Workbook.SaveAs($chemin)
 $Excel.Quit()
-
 Write-Host "Fichier sauvegarde : $chemin" -ForegroundColor Green
 ```
 
@@ -298,14 +315,10 @@ Write-Host "Fichier sauvegarde : $chemin" -ForegroundColor Green
 
 **Résumé des changements :**
 
-| Paramètre | Détail |
+| Élément | Détail |
 |---|---|
-| **Rotation texte** | -45° (sens inverse aiguilles montre) |
-| **Couleurs par préfixe** | `groupe` `projet` `dir` `daf` `drh` `com` `tech`... chacun sa couleur |
-| **R** | Gris clair `(200,200,200)` |
-| **RW** | Gris foncé `(130,130,130)` |
-| **Taille en-tête** | 10 gras sauf A1 = 11 |
-| **Taille col A** | 11 non gras |
-| **Reste tableau** | 10 gras |
-
-> ⚠️ Adapte les prefixes dans `Get-CouleurPrefixe` et `Get-CouleurDFS` selon tes vrais noms de groupes !
+| **Rotation texte** | Sens inverse aiguilles montre (bas → haut) |
+| **Couleurs par groupe** | Détection automatique du segment après `CDAD` |
+| **Cellules vides** | Teinte douce de la couleur du groupe colonne |
+| **R / RW** | Gris foncé `#5A5A5A` pour RW / Gris clair `#AAAAAA` pour R |
+| **Taille texte** | Entête ligne 1 : **10 gras** / Cellule A1 : **11** / Col A : **11** / Reste : **10 gras** |
