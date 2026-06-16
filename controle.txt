@@ -314,3 +314,1480 @@ Score global : XX/XX points → Niveau : 🟢 Conforme / 🟡 À surveiller / �
 ---
 
 Tu veux qu'on travaille sur **le script complet consolidé**, sur la **rédaction de la note** en bonne et due forme, ou sur le **rapport de restitution** ?
+
+
+
+
+
+
+--------------------------------------------------chat gpt ----------------------------------------
+
+Parfait, là tu touches à un vrai sujet de RSSI : **le contrôle interne des postes utilisateurs**, surtout avec des devs + droits admin = surface d’attaque énorme. On va structurer ça proprement, comme si tu devais le présenter à une direction + être auditable.
+
+Je vais te donner :
+1. **Une structure de note officielle (réutilisable)**
+2. **Le fond : quoi contrôler exactement (très détaillé)**
+3. **La méthode (comment t’y prendre concrètement)**
+4. **Des idées avancées (niveau RSSI expérimenté)**
+
+---
+
+# 🧾 1. Structure de ta note de contrôle interne
+
+Tu peux quasiment reprendre ça tel quel 👇
+
+---
+
+## 📌 Objet
+Contrôle interne des postes utilisateurs – périmètre postes Internet et postes administrés restreints.
+
+---
+
+## 🎯 Objectifs
+
+- Vérifier la **conformité des usages** aux règles SSI
+- Réduire les risques liés :
+  - à l’installation de logiciels non maîtrisés
+  - aux fuites de données
+  - aux compromissions via navigation web
+- Détecter les comportements à risque ou non conformes
+- S’assurer du respect du principe de **moindre privilège**
+
+---
+
+## 👥 Périmètre
+
+- Utilisateurs : développeurs et collaborateurs disposant :
+  - d’un poste Internet (avec droits admin)
+  - d’un poste restreint administré
+- Équipements :
+  - PC Internet
+  - PC restreints
+  - périphériques externes (USB, etc.)
+
+---
+
+## ⚙️ Modalités de contrôle
+
+- Contrôle :
+  - **automatisé** (scripts)
+  - **manuel** (vérifications ciblées)
+- Fréquence :
+  - ponctuelle / périodique (à définir : mensuelle, trimestrielle)
+- Mode :
+  - non intrusif mais traçable
+  - information préalable des utilisateurs (important RGPD)
+
+---
+
+## ⚖️ Cadre légal / conformité
+
+- Charte informatique
+- RGPD (proportionnalité, finalité)
+- Politique SSI interne
+
+---
+
+## 📊 Restitution
+
+- Rapport de contrôle :
+  - anomalies détectées
+  - niveau de criticité
+  - recommandations
+- Plan d’actions associé
+
+---
+
+# 🔍 2. Ce que tu dois contrôler (le cœur du sujet)
+
+Je te fais un **référentiel complet type RSSI terrain** 👇
+
+---
+
+## 🖥️ A. Poste Internet (PRIORITAIRE)
+
+### 🔐 1. Comptes & privilèges
+
+- Présence de comptes admin locaux
+- Utilisation réelle du compte admin
+- Mots de passe :
+  - complexité
+  - stockage (navigateur, fichiers…)
+- Sessions ouvertes / persistantes
+
+👉 ⚠️ Risque majeur : dev = admin = installation malware possible
+
+---
+
+### 📦 2. Logiciels installés
+
+Ton script est très bien → complète avec :
+
+- Liste complète des applications
+- Détection :
+  - logiciels non autorisés
+  - cracks / versions piratées
+  - outils de hacking (nmap, mimikatz…)
+- Versions :
+  - logiciels non à jour
+- Présence de :
+  - VPN perso
+  - outils de partage (torrent, mega sync…)
+
+---
+
+### 🌐 3. Navigation Web (très critique)
+
+Tu as déjà commencé 👍 mais pousse plus loin :
+
+- Historique :
+  - sites à risque (pastebin, dark web, warez…)
+- Extensions navigateur :
+  - extensions malveillantes
+  - extensions non validées
+- Téléchargements :
+  - types de fichiers (.exe, .ps1…)
+- Cookies / sessions actives
+
+---
+
+### 🔌 4. Périphériques externes
+
+Très important :
+
+- Historique USB (registre Windows)
+- Types de périphériques :
+  - stockage externe
+  - smartphones
+- Volume de connexions
+
+👉 Détection d’exfiltration potentielle
+
+---
+
+### 📁 5. Données sensibles
+
+- Présence de :
+  - dumps BDD
+  - fichiers clients
+  - clés API
+  - mots de passe en clair
+- Emplacements :
+  - Desktop
+  - Downloads
+  - dossiers perso
+
+---
+
+### 🔑 6. Secrets & pratiques dev
+
+Spécifique dev :
+
+- Clés SSH :
+  - non protégées par passphrase
+- Tokens :
+  - GitHub / GitLab
+- Fichiers :
+  - `.env`
+  - configs avec secrets
+- Accès à des dépôts externes non maîtrisés
+
+---
+
+### 🧪 7. Activité suspecte
+
+- Scripts PowerShell récents
+- Tâches planifiées
+- Processus actifs anormaux
+- Persistance (startup)
+
+---
+
+### 🛡️ 8. Sécurité du poste
+
+- Antivirus actif ?
+- Firewall actif ?
+- Mises à jour OS
+- Chiffrement disque (BitLocker)
+
+---
+
+## 🏢 B. Poste restreint (administré)
+
+Moins flexible mais à vérifier :
+
+- Conformité globale :
+  - pas d’installation sauvage
+- Vérification manuelle :
+  - sessions
+  - données locales
+- Accès réseau :
+  - connexions suspectes
+- Respect des usages (pas de contournement)
+
+---
+
+## 👤 C. Comportement utilisateur
+
+C’est souvent oublié, mais essentiel :
+
+- Utilisation du poste Internet pour :
+  - usage perso intensif ?
+- Stockage non autorisé
+- Contournement des règles SSI
+
+---
+
+# 🧠 3. Méthodologie (comment t’y prendre)
+
+---
+
+## 🪜 Étape 1 : cadrage
+
+- Définir :
+  - ce que tu contrôles
+  - pourquoi
+- Valider avec :
+  - RH
+  - juridique (important)
+
+---
+
+## 🧰 Étape 2 : industrialisation
+
+Ton script = très bonne base 👍
+
+Tu peux ajouter :
+
+- centralisation des résultats
+- scoring de risque par poste
+- anonymisation partielle
+
+---
+
+## 🔎 Étape 3 : analyse
+
+- Identifier :
+  - écarts vs politique
+  - comportements à risque
+- Classer :
+  - critique / majeur / mineur
+
+---
+
+## 📢 Étape 4 : restitution
+
+- Ne jamais "accuser"
+- Toujours :
+  - factuel
+  - orienté risque
+
+---
+
+## 🔁 Étape 5 : suivi
+
+- plan d’actions :
+  - suppression logiciels
+  - sensibilisation
+  - durcissement poste
+
+---
+
+# 🚀 4. Idées avancées (niveau RSSI)
+
+Là on monte en maturité 👇
+
+---
+
+## 🔒 Réduction du risque
+
+- supprimer les droits admin permanents
+- utiliser :
+  - PAM
+  - élévation contrôlée
+
+---
+
+## 🧠 Détection intelligente
+
+- corrélation :
+  - USB + fichiers + navigation
+- détection d’exfiltration
+
+---
+
+## 📊 Score de risque utilisateur
+
+Exemple :
+
+- +10 : logiciel interdit
+- +20 : clé API exposée
+- +30 : outil hacking
+
+---
+
+## 🧪 Tests complémentaires
+
+- tests de phishing interne
+- audits de code (secrets exposés)
+
+---
+
+## 📜 Mise en conformité
+
+- alignement :
+  - ISO 27001 (A.8, A.9, A.12)
+  - ANSSI bonnes pratiques
+
+---
+
+# ⚠️ Points de vigilance (très important)
+
+- RGPD :
+  - ne pas tout collecter sans justification
+- transparence :
+  - informer les utilisateurs
+- proportionnalité :
+  - éviter surveillance abusive
+
+---
+
+# 💬 Mon retour RSSI (franc)
+
+Tu es clairement sur **un bon sujet et une bonne approche** 👍  
+Mais attention à 3 pièges classiques :
+
+1. **Faire trop technique sans cadre officiel**
+2. **Collecter trop sans exploiter**
+3. **Oublier le juridique**
+
+---
+
+# 👉 Si tu veux aller encore plus loin
+
+Je peux te faire :
+
+- ✅ un modèle de **note complète prête à envoyer**
+- ✅ une **checklist terrain ultra opérationnelle**
+- ✅ une amélioration de ton script (quoi ajouter précisément)
+- ✅ un modèle de **rapport d’audit**
+
+Dis-moi 👍
+
+
+
+
+
+
+
+
+
+
+
+----------------------------claude-----------------------------------------
+# PLAN COMPLET DE CONTRÔLE INTERNE SSI - POSTES UTILISATEURS
+
+---
+
+## PRÉAMBULE - STRATÉGIE GLOBALE
+
+Avant tout, positionne-toi clairement : ce contrôle est **préventif et de conformité**, pas une chasse aux sorcières. Ça change tout dans la façon de le mener et de le faire accepter.
+
+---
+
+# PARTIE 1 — LA NOTE DE SERVICE / NOTE TECHNIQUE
+
+## 1.1 Structure de la note
+
+```
+OBJET : Contrôle interne périodique de conformité SSI des postes de travail
+RÉFÉRENCE : [Politique SSI] / [Charte informatique] / [PSSI]
+DATE : 
+DESTINATAIRES : Direction, RH, Managers, Utilisateurs concernés
+CLASSIFICATION : INTERNE / RESTREINT
+```
+
+## 1.2 Contenu obligatoire de la note
+
+### A) Le contexte et le pourquoi
+
+```
+Rédige ainsi :
+
+"Dans le cadre de la politique de sécurité des systèmes d'information 
+(PSSI) de [Organisation], et conformément à la charte informatique 
+signée par chaque utilisateur, [Direction/RSSI] procède à des contrôles 
+internes périodiques des postes de travail.
+
+Ces contrôles visent à :
+- Vérifier la conformité technique des configurations
+- S'assurer du respect des règles d'usage définies
+- Identifier les vulnérabilités et risques potentiels
+- Maintenir l'intégrité et la sécurité du SI
+- Protéger les données de l'organisation et des utilisateurs"
+```
+
+### B) Le cadre juridique et réglementaire — CRUCIAL
+
+```
+Mentionner obligatoirement :
+
+✦ RGPD (Règlement UE 2016/679)
+  → Licéité du traitement, information des personnes
+  
+✦ Code du travail - Articles L1121-1, L2323-47
+  → Proportionnalité, information préalable des IRP
+  
+✦ Recommandations CNIL
+  → Cybersurveillance sur les lieux de travail (délibération)
+  
+✦ Charte informatique interne signée
+  → Base contractuelle du contrôle
+  
+✦ PSSI de l'organisation
+  → Cadre politique interne
+  
+✦ Si secteur public : Code des relations entre 
+  le public et l'administration
+```
+
+> ⚠️ **POINT CRITIQUE** : Les employés doivent avoir été **informés préalablement** que leurs postes peuvent faire l'objet de contrôles. Si ce n'est pas dans la charte → **STOP**, corrige ça avant tout contrôle.
+
+### C) Les modalités opérationnelles
+
+```
+Préciser :
+
+1. QUI réalise le contrôle
+   → RSSI + Correspondant SSI
+   → Présence possible du manager
+   → Jamais seul si litige potentiel
+
+2. QUAND
+   → Planifié (contrôle périodique annuel/semestriel)
+   → Ou inoppiné (sur événement de sécurité)
+   → Durée estimée par poste : X heures
+   
+3. COMMENT
+   → En présence de l'utilisateur (RECOMMANDÉ fortement)
+   → Sur poste allumé avec session ouverte
+   → Script automatisé + vérifications manuelles
+   → Aucune modification du poste sans validation
+   
+4. PÉRIMÈTRE
+   → Postes concernés (PC Internet / PC Restreint)
+   → Ce qui est contrôlé (liste exhaustive)
+   → Ce qui NE l'est PAS (vie privée stricte, 
+     dossier marqué "PERSO" selon jurisprudence)
+     
+5. RESTITUTION
+   → Rapport individuel
+   → Rapport consolidé anonymisé
+   → Délai de restitution
+   → Procédure en cas de non-conformité détectée
+```
+
+### D) Les garanties pour l'utilisateur
+
+```
+- Droit à la contradiction
+- Possibilité d'être accompagné (délégué du personnel)
+- Confidentialité des résultats individuels
+- Distinction claire écart/faute
+- Pas de sanction automatique sur un premier écart mineur
+```
+
+---
+
+# PARTIE 2 — LE PLAN DE CONTRÔLE TECHNIQUE DÉTAILLÉ
+
+## PC INTERNET — PRIORITÉ MAXIMALE
+
+> Contexte : Développeurs, compte user + compte admin, accès internet libre
+
+---
+
+### 2.1 SYSTÈME ET CONFIGURATION DE BASE
+
+#### Inventaire système
+```powershell
+# Version OS et patch level
+Get-ComputerInfo | Select-Object WindowsProductName, 
+                                  WindowsVersion, 
+                                  OsBuildNumber,
+                                  OsLastBootUpTime
+
+# Dernières mises à jour installées
+Get-HotFix | Sort-Object InstalledOn -Descending | Select-Object -First 20
+
+# Uptime (un PC jamais redémarré = patches jamais appliqués)
+(Get-Date) - (gcim Win32_OperatingSystem).LastBootUpTime
+```
+
+**Ce que tu cherches :**
+- [ ] OS à jour (patches < 30 jours)
+- [ ] Version OS supportée (pas de Win10 EOL, etc.)
+- [ ] Redémarrage régulier (patches effectifs)
+- [ ] BitLocker actif et chiffrement effectif
+
+```powershell
+# État BitLocker
+manage-bde -status C:
+# ou
+Get-BitLockerVolume
+```
+
+#### Configuration du BIOS/UEFI
+```
+Vérification manuelle :
+□ Démarrage sur USB/CD désactivé
+□ Mot de passe BIOS positionné
+□ Secure Boot activé
+□ TPM activé et version (2.0 recommandé)
+□ Wake-on-LAN selon politique
+```
+
+---
+
+### 2.2 GESTION DES COMPTES ET PRIVILÈGES — CRITIQUE POUR TES DEVS
+
+C'est **LE point le plus sensible** avec des comptes user + admin sur le même poste.
+
+```powershell
+# Tous les comptes locaux et leur état
+Get-LocalUser | Select-Object Name, Enabled, 
+                               LastLogon, 
+                               PasswordLastSet,
+                               PasswordRequired,
+                               PasswordExpires
+
+# Membres du groupe Administrateurs local
+Get-LocalGroupMember -Group "Administrators"
+
+# Membres de tous les groupes locaux sensibles
+$groups = @("Administrators","Remote Desktop Users",
+            "Power Users","Backup Operators")
+foreach ($g in $groups) {
+    Write-Host "=== $g ===" -ForegroundColor Yellow
+    Get-LocalGroupMember -Group $g -ErrorAction SilentlyContinue
+}
+```
+
+**Ce que tu cherches :**
+- [ ] Compte Administrateur local par défaut **désactivé ou renommé**
+- [ ] Compte Invité **désactivé**
+- [ ] Combien de comptes admin locaux ? (doit être maîtrisé)
+- [ ] Le compte utilisateur courant est-il dans les admins ? (ne devrait pas l'être pour l'usage quotidien)
+- [ ] Comptes fantômes / comptes de test oubliés
+
+```powershell
+# Politique de mot de passe locale
+net accounts
+
+# Dernières connexions par compte
+Get-EventLog -LogName Security -InstanceId 4624 -Newest 100 |
+Select-Object TimeGenerated, 
+              @{N='User';E={$_.ReplacementStrings[5]}},
+              @{N='LogonType';E={$_.ReplacementStrings[8]}},
+              @{N='IP';E={$_.ReplacementStrings[18]}} |
+Where-Object {$_.User -notmatch 'SYSTEM|NETWORK|LOCAL'}
+```
+
+**Table des types de logon à surveiller :**
+```
+Type 2  = Interactif (normal)
+Type 3  = Réseau
+Type 4  = Batch (tâche planifiée)
+Type 5  = Service
+Type 7  = Déverrouillage
+Type 10 = Remote interactif (RDP) ← À surveiller
+Type 11 = Cache interactif
+```
+
+#### Vérification de l'utilisation réelle du compte admin
+
+```powershell
+# Quand le compte admin a-t-il été utilisé ?
+Get-EventLog -LogName Security -InstanceId 4624 -Newest 500 |
+Where-Object {$_.ReplacementStrings[5] -like "*admin*"} |
+Select-Object TimeGenerated, 
+              @{N='User';E={$_.ReplacementStrings[5]}},
+              @{N='Type';E={$_.ReplacementStrings[8]}}
+
+# Élévations UAC récentes (Event 4672 - privilèges spéciaux assignés)
+Get-EventLog -LogName Security -InstanceId 4672 -Newest 50 |
+Select-Object TimeGenerated,
+              @{N='User';E={$_.ReplacementStrings[1]}}
+```
+
+**Ce que tu veux valider :**
+- [ ] Le compte admin n'est utilisé **que** pour les installations/besoins légitimes
+- [ ] Pas de connexion admin en RDP depuis l'extérieur
+- [ ] La fréquence d'utilisation admin est cohérente avec le profil développeur
+
+---
+
+### 2.3 APPLICATIONS INSTALLÉES — CRITIQUE
+
+```powershell
+# Applications installées (méthode complète - 3 sources)
+
+# Source 1 : Registre 64 bits
+$apps1 = Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* |
+         Select-Object DisplayName, DisplayVersion, Publisher, InstallDate
+
+# Source 2 : Registre 32 bits
+$apps2 = Get-ItemProperty HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\* |
+         Select-Object DisplayName, DisplayVersion, Publisher, InstallDate
+
+# Source 3 : Registre utilisateur
+$apps3 = Get-ItemProperty HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* |
+         Select-Object DisplayName, DisplayVersion, Publisher, InstallDate
+
+# Fusion et export
+$allApps = ($apps1 + $apps2 + $apps3) | 
+           Where-Object {$_.DisplayName -ne $null} |
+           Sort-Object DisplayName
+
+$allApps | Export-Csv ".\apps_$(hostname)_$(Get-Date -f 'yyyyMMdd').csv" -NoTypeInformation
+
+# Compter
+Write-Host "Total applications : $($allApps.Count)"
+```
+
+**Grille d'analyse des applications :**
+```
+CATÉGORIES À INVESTIGUER EN PRIORITÉ :
+
+🔴 CRITIQUE - Justification obligatoire :
+□ Outils de prise en main à distance (TeamViewer, AnyDesk, 
+  UltraVNC, RustDesk, Splashtop...)
+□ Outils de tunneling (ngrok, frp, chisel...)
+□ VPN non autorisés (Tor Browser, ProtonVPN perso, 
+  Windscribe, NordVPN...)
+□ Outils de capture réseau (Wireshark, NetworkMiner...)
+□ Outils de hacking/pentest (Nmap, Metasploit, Burp Suite, 
+  Kali tools portés sous Windows...)
+□ Keyloggers / outils de surveillance (même "légitimes")
+□ Outils de chiffrement non autorisés (VeraCrypt...)
+□ Clients FTP/SFTP non référencés (FileZilla, WinSCP...)
+□ Applications de messagerie chiffrée non autorisées 
+  (Signal Desktop, Telegram...)
+□ Clients P2P/Torrent (qBittorrent, uTorrent...)
+
+🟠 SURVEILLANCE - À valider avec le manager :
+□ Outils de développement non référencés
+□ IDE supplémentaires (VS Code extensions non validées...)
+□ Docker, VirtualBox, VMware, WSL2
+□ Outils de gestion de versions alternatifs
+□ Clients de base de données (DBeaver, HeidiSQL...)
+□ Postman, Insomnia et équivalents
+□ Applications cloud sync (Dropbox perso, OneDrive perso, 
+  Google Drive...)
+
+🟡 À NOTER - Information :
+□ Applications de productivité personnelles
+□ Jeux installés
+□ Logiciels de streaming/médias
+```
+
+```powershell
+# Applications récemment installées (30 derniers jours)
+$cutoff = (Get-Date).AddDays(-30)
+$allApps | Where-Object {
+    $_.InstallDate -gt $cutoff.ToString("yyyyMMdd")
+} | Sort-Object InstallDate -Descending
+```
+
+---
+
+### 2.4 PROCESSUS ET SERVICES EN COURS
+
+```powershell
+# Processus en cours avec chemin exécutable
+Get-Process | Where-Object {$_.Path -ne $null} |
+Select-Object Name, Id, CPU, WorkingSet,
+              @{N='Path';E={$_.Path}},
+              @{N='Company';E={$_.Company}} |
+Sort-Object WorkingSet -Descending |
+Export-Csv ".\process_$(hostname).csv" -NoTypeInformation
+
+# Services non-Microsoft actifs
+Get-Service | Where-Object {$_.Status -eq 'Running'} |
+ForEach-Object {
+    $svc = $_
+    $wmi = Get-WmiObject Win32_Service -Filter "Name='$($svc.Name)'"
+    [PSCustomObject]@{
+        Name = $svc.Name
+        DisplayName = $svc.DisplayName
+        Status = $svc.Status
+        StartType = $svc.StartType
+        PathName = $wmi.PathName
+    }
+} | Where-Object {$_.PathName -notlike "*Windows*" -and 
+                   $_.PathName -notlike "*Microsoft*"} |
+Export-Csv ".\services_$(hostname).csv" -NoTypeInformation
+
+# Tâches planifiées (souvent utilisées pour persistence)
+Get-ScheduledTask | Where-Object {$_.State -ne 'Disabled'} |
+Select-Object TaskName, TaskPath, State,
+              @{N='Actions';E={$_.Actions.Execute}},
+              @{N='Author';E={$_.Author}} |
+Where-Object {$_.Author -notlike "*Microsoft*"} |
+Export-Csv ".\tasks_$(hostname).csv" -NoTypeInformation
+```
+
+**Signaux d'alerte :**
+- [ ] Processus avec chemin dans %TEMP%, %APPDATA%, %USERPROFILE%\Downloads
+- [ ] Services avec nom aléatoire ou peu explicite
+- [ ] Tâches planifiées créées par l'utilisateur à des horaires suspects
+- [ ] Processus consommant beaucoup de CPU/RAM sans raison
+
+---
+
+### 2.5 RÉSEAU ET CONNEXIONS
+
+```powershell
+# Connexions réseau actives avec processus
+$connections = Get-NetTCPConnection | 
+               Where-Object {$_.State -eq 'Established'} |
+               ForEach-Object {
+                   $proc = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue
+                   [PSCustomObject]@{
+                       LocalAddress  = $_.LocalAddress
+                       LocalPort     = $_.LocalPort
+                       RemoteAddress = $_.RemoteAddress
+                       RemotePort    = $_.RemotePort
+                       State         = $_.State
+                       PID           = $_.OwningProcess
+                       ProcessName   = $proc.Name
+                       ProcessPath   = $proc.Path
+                   }
+               }
+$connections | Export-Csv ".\network_$(hostname).csv" -NoTypeInformation
+
+# Ports en écoute (listening) - ce que le poste expose
+Get-NetTCPConnection -State Listen |
+ForEach-Object {
+    $proc = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue
+    [PSCustomObject]@{
+        LocalPort   = $_.LocalPort
+        ProcessName = $proc.Name
+        ProcessPath = $proc.Path
+        PID         = $_.OwningProcess
+    }
+} | Sort-Object LocalPort
+
+# Interfaces réseau et configuration
+Get-NetIPConfiguration | Select-Object InterfaceAlias,
+                                        IPv4Address,
+                                        IPv4DefaultGateway,
+                                        DNSServer
+                                        
+# Adaptateurs WiFi - réseaux connus (CRITIQUE !)
+netsh wlan show profiles
+# Pour chaque profil, voir le mot de passe en clair :
+# netsh wlan show profile name="SSID" key=clear
+```
+
+**Ce que tu cherches :**
+- [ ] Connexions vers des IP inhabituelles / pays étrangers
+- [ ] Ports en écoute non justifiés (serveurs locaux de dev ? OK, mais documenter)
+- [ ] Adaptateur réseau supplémentaire (4G/5G USB, hotspot Android...)
+- [ ] Profils WiFi personnels mémorisés (connexion possible hors réseau entreprise)
+- [ ] Connexions sur ports suspects : 4444 (Metasploit), 1080 (SOCKS proxy), 
+      8080/3128 (proxy), 6881 (BitTorrent)...
+
+```powershell
+# Configuration du proxy système
+netsh winhttp show proxy
+Get-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' |
+Select-Object ProxyEnable, ProxyServer, ProxyOverride, AutoConfigURL
+```
+
+---
+
+### 2.6 NAVIGATEURS WEB — TON POINT FORT (tu as déjà du script)
+
+#### Extensions de navigateurs — ANALYSE APPROFONDIE
+
+```powershell
+# Chrome - Extensions
+$chromePath = "$env:LOCALAPPDATA\Google\Chrome\User Data"
+if (Test-Path $chromePath) {
+    Get-ChildItem "$chromePath\*\Extensions" -Recurse -Filter "manifest.json" |
+    ForEach-Object {
+        $manifest = Get-Content $_.FullName | ConvertFrom-Json -ErrorAction SilentlyContinue
+        if ($manifest) {
+            [PSCustomObject]@{
+                Browser     = "Chrome"
+                Name        = $manifest.name
+                Version     = $manifest.version
+                Description = $manifest.description
+                Permissions = ($manifest.permissions -join ", ")
+                Path        = $_.DirectoryName
+            }
+        }
+    }
+}
+```
+
+**Permissions d'extensions à risque :**
+```
+🔴 TRÈS RISQUÉES :
+- "nativeMessaging"     → Peut communiquer avec applications locales
+- "debugger"            → Accès complet au débogueur du navigateur
+- "<all_urls>"          → Accès à tous les sites
+- "webRequest" + "blocking" → Peut intercepter/modifier tout le trafic
+- "proxy"               → Peut rediriger tout le trafic
+- "cookies"             → Accès à tous les cookies (sessions !)
+- "tabs" + "history"    → Historique complet
+
+🟠 À EXAMINER :
+- "downloads"
+- "notifications"
+- "clipboardRead"
+- "storage"
+```
+
+```powershell
+# Firefox - Extensions
+$ffPath = "$env:APPDATA\Mozilla\Firefox\Profiles"
+if (Test-Path $ffPath) {
+    Get-ChildItem $ffPath -Filter "extensions.json" -Recurse |
+    ForEach-Object {
+        $data = Get-Content $_.FullName | ConvertFrom-Json
+        $data.addons | Where-Object {$_.type -eq "extension"} |
+        Select-Object name, version, active,
+                      @{N='Permissions';E={$_.userPermissions.permissions -join ', '}}
+    }
+}
+```
+
+#### Historique et analyse comportementale
+
+```powershell
+# Chrome - Analyse de l'historique SQLite
+# Le fichier History est une base SQLite
+$histPath = "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\History"
+if (Test-Path $histPath) {
+    # Copie car Chrome verrouille le fichier
+    Copy-Item $histPath ".\Chrome_History_backup.db"
+    
+    # Nécessite sqlite3.exe dans le PATH
+    # sqlite3 .\Chrome_History_backup.db ".mode csv" ".output history.csv" 
+    # "SELECT url, title, visit_count, last_visit_time FROM urls ORDER BY last_visit_time DESC LIMIT 1000;" ".quit"
+}
+```
+
+**Catégories d'URLs à analyser :**
+```
+🔴 ALERTES :
+□ Sites de partage de code/données : pastebin.com, hastebin, 
+  ghostbin, dpaste... (exfiltration de code ?)
+□ Sites de transfert de fichiers : wetransfer, sendspace, 
+  filedropper, bayfiles...
+□ Plateformes cloud perso : drive.google.com (compte perso), 
+  dropbox.com, mega.nz...
+□ Sites d'anonymisation : tor2web, i2p, proxy-* 
+□ Cryptomonnaies : exchanges, wallets web (minage ?)
+□ Darkweb accès via clearnet : ahmia.fi, etc.
+□ Sites de job : linkedin, indeed, glassdoor... 
+  (contextuel, mais notable)
+□ Concurrents directs de l'entreprise
+
+🟠 À CONTEXTUALISER :
+□ GitHub/GitLab (perso vs pro ?)
+□ Stackoverflow (normal pour dev, mais vérifier les questions posées)
+□ Registres npm, PyPI (téléchargement de packages)
+□ Forums spécialisés hack/sécurité (veille légitime ou ?)
+□ Messageries : WhatsApp Web, Telegram Web...
+```
+
+#### Mots de passe enregistrés dans les navigateurs
+
+```powershell
+# Vérifier si des mots de passe sont enregistrés
+# (sans les extraire - juste l'existence)
+$loginData = "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Login Data"
+if (Test-Path $loginData) {
+    $size = (Get-Item $loginData).Length
+    Write-Host "Fichier Login Data Chrome présent - Taille : $size octets"
+    Write-Host "Des identifiants sont potentiellement stockés"
+    # Si taille > quelques Ko, des credentials sont stockés
+}
+```
+
+> ⚠️ **Note RSSI** : Tu **ne dois pas** extraire les mots de passe eux-mêmes. Constate simplement la présence et sensibilise sur les risques (si le poste est compromis, tous les mots de passe le sont aussi).
+
+---
+
+### 2.7 REGISTRE WINDOWS — ANALYSE SÉCURITÉ
+
+```powershell
+# Clés de démarrage automatique (Run/RunOnce)
+$runKeys = @(
+    "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run",
+    "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce",
+    "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run",
+    "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce",
+    "HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Run"
+)
+
+foreach ($key in $runKeys) {
+    if (Test-Path $key) {
+        Write-Host "`n=== $key ===" -ForegroundColor Cyan
+        Get-ItemProperty $key | 
+        Select-Object * -ExcludeProperty PS* |
+        Format-List
+    }
+}
+
+# Programmes au démarrage via HKLM\System
+Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\BootExecute"
+
+# Shell extensions enregistrées (injection possible)
+Get-ChildItem "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" |
+Format-List
+
+# Vérification Userinit et Shell (tampering potentiel)
+Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" |
+Select-Object Userinit, Shell
+# Valeurs normales : 
+# Userinit = C:\Windows\system32\userinit.exe,
+# Shell = explorer.exe
+```
+
+#### Registre USB - Historique des périphériques
+
+```powershell
+# Historique complet des USB connectés
+Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Enum\USBSTOR\*\*" |
+Select-Object FriendlyName, 
+              @{N='DeviceID';E={$_.PSChildName}},
+              @{N='Manufacturer';E={$_.Mfg}},
+              Service |
+Sort-Object FriendlyName |
+Export-Csv ".\usb_history_$(hostname).csv" -NoTypeInformation
+
+# Avec les dates de première et dernière connexion
+# (nécessite interrogation du registre SetupAPI)
+$setupLog = "C:\Windows\INF\setupapi.dev.log"
+if (Test-Path $setupLog) {
+    Select-String -Path $setupLog -Pattern "USBSTOR" |
+    Select-Object -First 50 |
+    Out-File ".\setupapi_usb_$(hostname).txt"
+}
+```
+
+**Ce que tu cherches :**
+- [ ] Clés USB personnelles non autorisées
+- [ ] Disques durs externes
+- [ ] Périphériques mobiles (smartphones en MTP/PTP = transfert de données !)
+- [ ] Périphériques inconnus ou suspects
+- [ ] Fréquence et volume des connexions USB
+
+---
+
+### 2.8 ANTIVIRUS ET SÉCURITÉ ENDPOINT
+
+```powershell
+# État Windows Defender
+Get-MpComputerStatus | Select-Object AMRunningMode,
+                                      AntivirusEnabled,
+                                      AntispywareEnabled,
+                                      RealTimeProtectionEnabled,
+                                      AntivirusSignatureLastUpdated,
+                                      AntivirusSignatureVersion,
+                                      BehaviorMonitorEnabled,
+                                      IoavProtectionEnabled,
+                                      NISEnabled,
+                                      OnAccessProtectionEnabled
+
+# Dernières détections (menaces trouvées)
+Get-MpThreatDetection | Select-Object ActionSuccess,
+                                        DetectionID,
+                                        InitialDetectionTime,
+                                        LastThreatStatusChangeTime,
+                                        @{N='ThreatName';E={
+                                            (Get-MpThreat -ThreatID $_.ThreatID).ThreatName
+                                        }} |
+Sort-Object InitialDetectionTime -Descending
+
+# Exclusions configurées (CRITIQUE - peuvent masquer des menaces)
+Get-MpPreference | Select-Object ExclusionPath,
+                                   ExclusionExtension,
+                                   ExclusionProcess,
+                                   ExclusionIpAddress
+```
+
+**⚠️ POINT CRITIQUE : Les exclusions AV**
+```
+Des exclusions légitimes pour les devs existent (dossiers de build, 
+répertoires node_modules, etc.) MAIS :
+
+□ Sont-elles documentées et approuvées ?
+□ Sont-elles trop larges ? (ex: exclusion de C:\Users\dev\ entier = 🚨)
+□ Ont-elles été ajoutées par l'utilisateur lui-même ?
+□ Correspondent-elles à des dossiers existants ?
+
+→ Croiser avec les dossiers réellement présents
+```
+
+```powershell
+# Pare-feu Windows
+Get-NetFirewallProfile | Select-Object Name, Enabled, DefaultInboundAction, DefaultOutboundAction
+
+# Règles de pare-feu ajoutées manuellement (hors règles Microsoft)
+Get-NetFirewallRule | Where-Object {
+    $_.Enabled -eq 'True' -and 
+    $_.Owner -ne 'Microsoft'
+} | Select-Object DisplayName, Direction, Action, 
+                   @{N='Program';E={
+                       (Get-NetFirewallApplicationFilter -AssociatedNetFirewallRule $_).Program
+                   }} |
+Export-Csv ".\firewall_rules_$(hostname).csv" -NoTypeInformation
+```
+
+---
+
+### 2.9 DONNÉES ET FICHIERS SENSIBLES
+
+```powershell
+# Fichiers potentiellement sensibles dans les emplacements courants
+$sensitivePaths = @(
+    "$env:USERPROFILE\Desktop",
+    "$env:USERPROFILE\Downloads",
+    "$env:USERPROFILE\Documents"
+)
+
+$sensitiveExtensions = @("*.kdbx","*.key","*.pem","*.p12","*.pfx",
+                          "*.ppk","*.rdp","*.vnc","*.ovpn","*.conf",
+                          "*.env","*.credentials","*password*",
+                          "*passwd*","*secret*","*token*","*apikey*")
+
+foreach ($path in $sensitivePaths) {
+    foreach ($ext in $sensitiveExtensions) {
+        Get-ChildItem -Path $path -Filter $ext -Recurse -ErrorAction SilentlyContinue |
+        Select-Object FullName, Length, LastWriteTime, CreationTime
+    }
+}
+```
+
+**Cas spécifique DÉVELOPPEURS :**
+```powershell
+# Fichiers de configuration avec secrets potentiels
+$devSecrets = @("*.env",".env.local",".env.production",
+                "config.json","secrets.json","appsettings.json",
+                "*.yaml","*.yml","docker-compose.yml",
+                "Dockerfile","*.tf")  # Terraform
+
+# Clés SSH
+Get-ChildItem "$env:USERPROFILE\.ssh\" -ErrorAction SilentlyContinue |
+Select-Object Name, Length, LastWriteTime
+
+# Clés AWS/Cloud credentials
+$cloudCreds = @(
+    "$env:USERPROFILE\.aws\credentials",
+    "$env:USERPROFILE\.azure\",
+    "$env:USERPROFILE\.config\gcloud\",
+    "$env:APPDATA\doctl\config.yaml"
+)
+foreach ($c in $cloudCreds) {
+    if (Test-Path $c) {
+        Write-Host "⚠️ Credentials cloud trouvés : $c" -ForegroundColor Red
+    }
+}
+
+# Tokens Git en clair
+if (Test-Path "$env:USERPROFILE\.gitconfig") {
+    Get-Content "$env:USERPROFILE\.gitconfig"
+}
+# Vérifier aussi le credential store
+cmdkey /list
+```
+
+> 🔑 **Contexte développeur** : La présence de clés AWS, tokens Git, credentials docker en clair sur le poste est **TRÈS FRÉQUENTE** et **TRÈS DANGEREUSE**. C'est souvent le vrai risque n°1.
+
+---
+
+### 2.10 JOURNAUX D'ÉVÉNEMENTS WINDOWS — FORENSIQUE LIGHT
+
+```powershell
+# Créer un rapport complet des events de sécurité importants
+
+# 1. Connexions réussies (4624)
+$logons = Get-WinEvent -FilterHashtable @{
+    LogName='Security'; Id=4624; 
+    StartTime=(Get-Date).AddDays(-30)
+} -MaxEvents 1000 | ForEach-Object {
+    $xml = [xml]$_.ToXml()
+    [PSCustomObject]@{
+        Time     = $_.TimeCreated
+        User     = $xml.Event.EventData.Data[5].'#text'
+        Domain   = $xml.Event.EventData.Data[6].'#text'
+        LogonType= $xml.Event.EventData.Data[8].'#text'
+        IP       = $xml.Event.EventData.Data[18].'#text'
+    }
+}
+
+# 2. Échecs de connexion (4625) - tentatives de bruteforce ?
+Get-WinEvent -FilterHashtable @{
+    LogName='Security'; Id=4625;
+    StartTime=(Get-Date).AddDays(-30)
+} -MaxEvents 200
+
+# 3. Création de comptes (4720)
+Get-WinEvent -FilterHashtable @{LogName='Security'; Id=4720} -MaxEvents 50
+
+# 4. Ajout aux groupes privilegiés (4732 = ajout Admins)
+Get-WinEvent -FilterHashtable @{LogName='Security'; Id=4732} -MaxEvents 50
+
+# 5. Modifications de politique (4719)
+Get-WinEvent -FilterHashtable @{LogName='Security'; Id=4719} -MaxEvents 20
+
+# 6. Démarrage/arrêt de services (7045 = nouveau service installé !)
+Get-WinEvent -FilterHashtable @{LogName='System'; Id=7045} -MaxEvents 50
+
+# 7. PowerShell - commandes exécutées (4104 - Script Block Logging)
+Get-WinEvent -FilterHashtable @{
+    LogName='Microsoft-Windows-PowerShell/Operational'; 
+    Id=4104
+} -MaxEvents 100 | Select-Object TimeCreated, Message
+```
+
+**Event IDs critiques à surveiller :**
+```
+ID     | Description                          | Criticité
+-------|--------------------------------------|----------
+4624   | Connexion réussie                    | INFO
+4625   | Échec de connexion                   | 🟠
+4648   | Connexion avec credentials explicites | 🔴
+4672   | Privilèges spéciaux à la connexion   | 🟠
+4697   | Service installé                     | 🔴
+4698   | Tâche planifiée créée                | 🟠
+4720   | Compte créé                          | 🔴
+4732   | Membre ajouté groupe Admins           | 🔴
+4776   | Validation credentials DC            | INFO
+7045   | Nouveau service installé (System)    | 🔴
+1102   | Journal d'audit effacé               | 🔴🔴
+4104   | PowerShell script block              | 🟠
+```
+
+---
+
+### 2.11 VIRTUALISATION ET CONTENEURS — SPÉCIFIQUE DEVS
+
+```powershell
+# Docker - état et images
+docker ps -a           # Conteneurs (actifs et arrêtés)
+docker images          # Images présentes
+docker volume ls       # Volumes (données persistantes)
+docker network ls      # Réseaux configurés
+
+# WSL2 (Windows Subsystem for Linux)
+wsl --list --verbose   # Distributions installées
+# Attention : WSL2 crée un réseau virtuel distinct
+# et peut potentiellement bypasser certains contrôles réseau
+
+# VirtualBox
+if (Test-Path "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe") {
+    & "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" list vms
+    & "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" list runningvms
+}
+
+# VMware
+if (Test-Path "C:\Program Files (x86)\VMware\") {
+    Write-Host "VMware détecté"
+    # Lister les .vmx récents
+    Get-ChildItem "$env:USERPROFILE\" -Filter "*.vmx" -Recurse -ErrorAction SilentlyContinue
+}
+
+# Hyper-V
+Get-VM -ErrorAction SilentlyContinue | 
+Select-Object Name, State, Generation, MemoryAssigned
+```
+
+**Risques spécifiques virtualisation pour devs :**
+```
+□ VM avec OS différent (Linux) pouvant contourner les contrôles
+□ Conteneurs Docker exposant des ports sur la machine hôte
+□ Images Docker contenant des outils de pentest
+□ WSL2 avec accès au système de fichiers Windows
+□ Snapshots de VM contenant des données sensibles
+□ Réseaux host-only permettant isolation des contrôles réseau
+```
+
+---
+
+## PC RESTREINT — CONTRÔLE ADAPTÉ
+
+> Contexte : Postes verrouillés par l'administration, vérifications manuelles uniquement
+
+### 3.1 Check-list de contrôle visuel/manuel
+
+```
+VÉRIFICATIONS PHYSIQUES :
+□ État physique du poste (sticker inviolable intègre ?)
+□ Périphériques connectés (USB visibles, hubs, ...)
+□ Post-its avec mots de passe (oui ça arrive encore en 2026)
+□ Câbles réseau : le poste est-il sur le bon réseau/VLAN ?
+
+VÉRIFICATIONS SYSTÈME (droits limités) :
+□ Écran de veille avec mot de passe activé
+□ Délai de verrouillage respecté (≤ 10 min)
+□ Fond d'écran conforme (indicateur de classification visible ?)
+□ Version de l'OS visible (Paramètres > Système > À propos)
+□ Date et heure correctes
+□ Nom du poste conforme à la nomenclature
+
+VÉRIFICATIONS UTILISATEUR :
+□ L'utilisateur connaît sa charte ?
+□ Partage de session/compte avec collègue ?
+□ Pratique du verrouillage manuel (Win+L) ?
+□ Connaissance du processus de signalement d'incident ?
+```
+
+### 3.2 Ce que tu peux quand même vérifier en manuel
+
+```
+Via le Gestionnaire des tâches (si accessible) :
+□ Processus en cours (onglet Processus)
+□ Connexions réseau si onglet disponible
+□ Utilisation ressources anormale (CPU/RAM/Disque/Réseau)
+
+Via le navigateur (si autorisé) :
+□ Extensions installées (accessible via le navigateur)
+□ Paramètres de proxy
+□ Page de démarrage modifiée ?
+
+Via l'explorateur Windows :
+□ Fichiers sur le bureau (documents sensibles en clair ?)
+□ Corbeille (documents récemment supprimés)
+□ Documents récents (Ctrl+N dans explorateur ou menu récent)
+□ Présence de dossiers personnels volumineux
+```
+
+---
+
+# PARTIE 3 — VOLET ORGANISATIONNEL
+
+## 3.1 Contrôle documentaire utilisateur
+
+```
+DOCUMENTS À VÉRIFIER PAR UTILISATEUR :
+□ Charte informatique signée et datée (version à jour ?)
+□ Formulaire de remise de matériel signé
+□ NDA / Accord de confidentialité
+□ Formulaire d'habilitation si données sensibles
+□ Accusé de réception de la PSSI
+
+POSEZ CES QUESTIONS À L'UTILISATEUR :
+□ "Qui a accès à votre session en votre absence ?"
+□ "Comment gérez-vous vos mots de passe ?" 
+  (gestionnaire ? post-it ?)
+□ "Avez-vous des accès à des systèmes externes ?"
+□ "Avez-vous des données professionnelles sur des 
+   supports personnels ?"
+□ "Avez-vous signalé des incidents/anomalies ces 
+   derniers mois ?"
+□ "Partagez-vous des credentials avec des collègues ?"
+```
+
+## 3.2 Contrôle des accès logiques
+
+```
+À VÉRIFIER CÔTÉ SI / ACTIVE DIRECTORY :
+□ Droits AD de l'utilisateur cohérents avec sa fonction
+□ Groupes AD : pas de droits résiduels (ancien poste ?)
+□ Comptes de service associés à la personne
+□ Accès VPN : actif ? nécessaire ?
+□ Accès aux partages réseau : audit des permissions
+□ Boîtes mail partagées : toujours justifiées ?
+□ Droits sur applications métier : principe de moindre privilège ?
+
+REQUÊTES AD UTILES :
+# Groupes de l'utilisateur
+Get-ADPrincipalGroupMembership -Identity "username" | 
+Select-Object Name, GroupCategory, GroupScope
+
+# Dernière connexion AD
+Get-ADUser -Identity "username" -Properties LastLogonDate |
+Select-Object Name, LastLogonDate, Enabled
+```
+
+---
+
+# PARTIE 4 — RAPPORT DE CONTRÔLE
+
+## 4.1 Structure du rapport individuel
+
+```
+RAPPORT DE CONTRÔLE SSI - POSTE [HOSTNAME]
+==========================================
+Date du contrôle    : 
+Contrôleurs         : RSSI + Correspondant SSI
+Utilisateur         : [Prénom NOM] - [Fonction]
+Présent lors du CT  : Oui / Non
+Poste               : [PC Internet / PC Restreint]
+Hostname            : 
+OS                  : 
+Dernier patch       : 
+
+SYNTHÈSE : ✅ CONFORME / ⚠️ ÉCARTS MINEURS / 🚨 NON-CONFORME
+
+---
+DÉTAIL DES CONSTATS
+
+[Pour chaque point contrôlé]
+Rubrique         : Gestion des comptes
+Constat          : 3 comptes dans le groupe Admins locaux 
+                   (attendu : 1 compte admin nommé)
+Niveau de risque : ÉLEVÉ
+Recommandation   : Supprimer les comptes xxx et yyy du groupe 
+                   Administrateurs
+Délai            : Immédiat
+Responsable      : RSSI + Utilisateur
+---
+
+PLAN D'ACTION
+
+N° | Constat | Action | Responsable | Délai | Statut
+1  | ...     | ...    | ...         | ...   | OUVERT
+```
+
+## 4.2 Système de cotation des risques
+
+```
+GRAVITÉ × VRAISEMBLANCE = CRITICITÉ
+
+Gravité :
+1 - Négligeable
+2 - Limitée
+3 - Importante  
+4 - Critique
+
+Vraisemblance :
+1 - Improbable
+2 - Possible
+3 - Vraisemblable
+4 - Quasi-certaine
+
+Score 1-4   : FAIBLE    → Surveillance
+Score 5-9   : MODÉRÉ    → Action planifiée (< 3 mois)
+Score 10-14 : ÉLEVÉ     → Action rapide (< 1 mois)
+Score 15-16 : CRITIQUE  → Action immédiate
+```
+
+---
+
+# PARTIE 5 — ASPECTS LÉGAUX ET PIÈGES À ÉVITER
+
+## Ce que tu NE dois PAS faire
+
+```
+🚫 Extraire des mots de passe en clair
+🚫 Accéder aux fichiers marqués "PERSO" sans présence de l'utilisateur
+   et accord (jurisprudence Nikon - Cass. soc. 2 oct. 2001)
+🚫 Lire le contenu des mails personnels
+   (même sur messagerie pro si clairement identifiés comme perso)
+🚫 Effectuer le contrôle à l'insu TOTAL de l'utilisateur
+   sans information préalable générale
+🚫 Utiliser les résultats à des fins disciplinaires 
+   sans respecter la procédure RH
+🚫 Conserver les données de contrôle au-delà du nécessaire
+🚫 Partager les résultats individuels en dehors du circuit prévu
+```
+
+## Ce que tu DOIS faire pour te protéger
+
+```
+✅ Faire signer une feuille de présence par l'utilisateur
+✅ Garder les scripts utilisés (reproductibilité)
+✅ Horodater toutes les actions
+✅ Travailler en binôme
+✅ Documenter les écarts, même mineurs
+✅ Distinguer clairement constat et qualification
+   (le constat, c'est ton travail ; la sanction, c'est RH/direction)
+✅ Avoir une chaîne de validation : RSSI → DRH → Direction
+   avant toute suite disciplinaire
+```
+
+---
+
+# PARTIE 6 — TABLEAU DE BORD ET PLAN DE CONTRÔLE ANNUEL
+
+## Planning type
+
+```
+JANVIER     : Planification, mise à jour des outils de contrôle
+FÉVRIER     : Contrôle PC Internet Dev - Vague 1
+MARS        : Restitution vague 1, actions correctives
+AVRIL       : Contrôle PC Internet Dev - Vague 2
+MAI         : Contrôle PC Restreint
+JUIN        : Rapport semestriel consolidé
+              Présentation direction / COPIL SSI
+JUILLET-AOÛT: Pause (ou contrôles inopinés légers)
+SEPTEMBRE   : Contrôle thématique (ex: focus USB/cloud)
+OCTOBRE     : Contrôle complet postes nomades
+NOVEMBRE    : Vérification des plans d'action
+DÉCEMBRE    : Rapport annuel, mise à jour PSSI si nécessaire
+              Bilan pour audit interne/externe
+```
+
+## Indicateurs à suivre
+
+```
+KPI SSI POSTES DE TRAVAIL :
+┌──────────────────────────────────────────────┬────────┐
+│ Taux de conformité global                    │  xx%   │
+│ Nb postes avec AV à jour                     │  xx/xx │
+│ Nb postes avec patches < 30j                 │  xx/xx │
+│ Nb comptes admin locaux non justifiés        │  xx    │
+│ Nb extensions navigateur non autorisées      │  xx    │
+│ Nb outils de prise en main à distance        │  xx    │
+│ Nb postes avec credentials cloud en clair    │  xx    │
+│ Taux de chartes signées à jour               │  xx%   │
+│ Délai moyen de résolution des écarts         │  xx j  │
+└──────────────────────────────────────────────┴────────┘
+```
+
+---
+
+# RÉSUMÉ EXÉCUTIF - PAR OÙ COMMENCER
+
+```
+SÉQUENCE RECOMMANDÉE :
+
+SEMAINE 1 :
+✦ Rédiger et faire valider la note de service
+✦ Informer les IRP (si applicable)
+✦ Préparer et tester le script de collecte
+✦ Créer les modèles de rapport
+
+SEMAINE 2 :
+✦ Contrôles terrain (prévoir 2-3h/poste)
+✦ Collecte des données avec les scripts
+✦ Vérifications manuelles (BIOS, physique, entretien utilisateur)
+
+SEMAINE 3 :
+✦ Analyse des données collectées
+✦ Rédaction des rapports individuels
+✦ Identification des constats prioritaires
+
+SEMAINE 4 :
+✦ Restitution individuelle
+✦ Définition des plans d'action
+✦ Rapport consolidé pour la direction
+
+FOCUS IMMÉDIAT SUR :
+1. Clés/tokens/secrets en clair (risque de fuite de code/données)
+2. Outils de prise en main à distance non déclarés
+3. Comptes administrateurs locaux non maîtrisés
+4. Extensions navigateur avec permissions élevées
+5. Exclusions AV non documentées
+```
+
+---
+
+*Ce document constitue ton référentiel de contrôle. Adapte-le à ta PSSI et au contexte réglementaire de ton organisation. En cas de découverte d'un incident avéré lors du contrôle, applique immédiatement ta procédure de gestion d'incident.*
