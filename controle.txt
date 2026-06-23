@@ -207,7 +207,7 @@ Get-ChildItem C:\Users -Recurse -Filter ".git" -Directory |
 Get-NetIPConfiguration
 
 # Connexions VPN configurées
-Get-VpnConnection
+Get-VpnConnection646
 
 # Proxy configuré
 netsh winhttp show proxy
@@ -1791,3 +1791,248 @@ FOCUS IMMÉDIAT SUR :
 ---
 
 *Ce document constitue ton référentiel de contrôle. Adapte-le à ta PSSI et au contexte réglementaire de ton organisation. En cas de découverte d'un incident avéré lors du contrôle, applique immédiatement ta procédure de gestion d'incident.*
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Parfait, on va extraire **strictement** du document tout ce que les utilisateurs (ou entités) doivent faire ou renseigner dans **TULEAP**, sans rien inventer.
+
+---
+
+### 🔎 1. Recensement des mises en place de développement
+- Chaque développeur doit :
+  - **Décrire son contexte de travail** pour chaque SI
+  - Le renseigner dans TULEAP :
+    - outil : *"Mises en place de développement"*
+
+---
+
+### 🔎 2. Suivi des mises en place de développement (contrôle interne)
+- Chaque entité doit :
+  - Mettre à jour dans TULEAP (*"Actions de contrôle interne"*) :
+    - l’artefact **"Suivi des mises en place de développement"**
+    - la **date du dernier contrôle**
+    - la colonne **"Commentaires dernier contrôle interne"** avec les conclusions
+
+- L’État-major :
+  - Met à jour le même artefact dans TULEAP
+
+---
+
+### 🔎 3. Suivi des comptes et accès à privilèges INTERNET
+- Chaque entité doit :
+  - Mettre à jour dans TULEAP (*"Actions de contrôle interne"*) :
+    - l’artefact **"Suivi des comptes et accès à privilège"**
+    - la **date du dernier contrôle**
+    - la colonne **"Commentaires dernier contrôle interne"**
+
+- L’État-major :
+  - Met à jour l’artefact correspondant dans TULEAP (*"Contrôle interne"*)
+
+---
+
+### 🔎 4. Dérogations pour courriel INTERNET non ministériel
+- La demande doit être faite dans TULEAP :
+  - outil : **"Dérogations courriel INTERNET non ministériel"**
+
+---
+
+### 🔎 5. SI réalisés sur INTERNET (déclaration et suivi)
+- Avant création des espaces :
+  - Faire une demande dans TULEAP :
+    - outil : **"SI réalisés sur INTERNET"**
+
+- Ensuite, chaque RRP doit :
+  - **Mettre à jour trimestriellement** les informations dans TULEAP
+
+---
+
+### 🔎 6. Suivi des SI réalisés sur INTERNET (contrôle interne)
+- Chaque entité doit :
+  - Mettre à jour dans TULEAP (*"Actions de contrôle interne"*) :
+    - l’artefact **"Suivi des SI réalisés sur INTERNET"**
+    - la **date du dernier contrôle**
+    - la colonne **"Commentaires dernier contrôle interne"**
+
+- L’État-major :
+  - Met à jour le même artefact dans TULEAP
+
+---
+
+### 🔎 7. MULTIBOOT – suivi des systèmes supplémentaires
+- Le CSSI doit :
+  - Créer un artefact dans TULEAP :
+    - outil : **"Dérogations admin INTERNET"**
+  - Pour suivre le système d’exploitation ajouté
+
+---
+
+### 🔎 8. Dérogation administrateur poste de travail INTERNET
+- La demande doit être faite dans TULEAP :
+  - outil : **"Dérogations admin INTERNET"**
+
+- En cas de renouvellement :
+  - Le CSSI met à jour le champ :
+    - **"Validation de la demande"** → *"Renouvellement de la dérogation à demander par le détenteur"*
+
+---
+
+### 🔎 9. Suivi des postes de travail INTERNET
+- Chaque entité doit :
+  - Mettre à jour dans TULEAP (*"Actions de contrôle interne"*) :
+    - l’artefact **"Suivi des postes de travail INTERNET"**
+
+- L’État-major :
+  - Met à jour dans TULEAP (*"Actions des CSSI"*) :
+    - l’artefact **"Suivi des postes de travail INTERNET"**
+
+---
+
+### ✅ Synthèse rapide (vision RSSI)
+Dans TULEAP, les utilisateurs/entités doivent principalement :
+- **Déclarer** (SI, contextes, dérogations)
+- **Mettre à jour régulièrement** (trimestriel / semestriel / annuel)
+- **Tracer les contrôles internes** :
+  - date
+  - conclusions
+- **Maintenir des artefacts spécifiques à jour**
+
+---
+
+Si tu veux, je peux te transformer ça en **trame de note officielle prête à signer (style ministère)** ou en **checklist d’audit SSI** 👍
+
+
+
+
+
+
+
+
+
+
+# Note de Contrôle Interne SSI
+## Actions utilisateurs à renseigner sur TULEAP
+
+---
+
+## 1. MISES EN PLACE DE DÉVELOPPEMENT
+
+**Qui :** Chaque développeur
+
+**Action :** Décrire son contexte de travail pour chacun des SI sur lesquels il travaille
+
+**Outil TULEAP :** Tracker "Mises en place de développement"
+👉 https://forge.intradef.gouv.fr/plugins/tracker/?tracker=19643
+
+**Fréquence du contrôle interne :** Semestriel (un contrôle au 1er semestre + un post-PAM)
+
+**Qui contrôle :** Chaque entité du PODEV
+
+**Où rendre compte :** Outil de suivi "Actions de contrôle interne" → artefact **"Suivi des mises en place de développement"**
+- Mettre à jour la date de dernier contrôle
+- Renseigner les conclusions dans la colonne **"Commentaires dernier contrôle interne"**
+
+---
+
+## 2. COMPTES ET ACCÈS À PRIVILÈGES INTERNET
+
+**Qui :** Chaque entité du PODEV
+
+**Action :** Contrôle interne des accès accordés aux outils SAAS et plateformes INTERNET, notamment vérification de l'adéquation entre le suivi effectué et la réalité
+
+**Fréquence :** Semestriel (un contrôle au 1er semestre + un post-PAM)
+
+**Où rendre compte :** Outil de suivi "Actions de contrôle interne" → artefact **"Suivi des comptes et accès à privilège"**
+- Mettre à jour la date de dernier contrôle
+- Renseigner les conclusions dans la colonne **"Commentaires dernier contrôle interne"**
+
+---
+
+## 3. SI RÉALISÉS SUR INTERNET
+
+**Qui :** Chaque RRP (Responsable de la Réalisation du Projet)
+
+**Action :** Mise à jour trimestrielle des informations concernant les SI réalisés sur INTERNET
+
+**Outil TULEAP :** Tracker "SI réalisés sur INTERNET"
+👉 https://forge.intradef.gouv.fr/plugins/tracker/?tracker=19645
+
+**Fréquence du contrôle interne :** Semestriel (un contrôle au 1er semestre + un post-PAM)
+
+**Qui contrôle :** Chaque entité du PODEV
+
+**Où rendre compte :** Outil de suivi "Actions de contrôle interne" → artefact **"Suivi des SI réalisés sur INTERNET"**
+- Mettre à jour la date de dernier contrôle
+- Renseigner les conclusions dans la colonne **"Commentaires dernier contrôle interne"**
+
+---
+
+## 4. DÉROGATIONS COURRIEL INTERNET NON MINISTÉRIEL
+
+**Qui :** Tout utilisateur ne pouvant pas utiliser une adresse ministérielle (@beta.gouv.fr ou @def.gouv.fr)
+
+**Action :** Formuler une demande de dérogation en justifiant l'emploi d'une autre adresse
+
+**Outil TULEAP :** Tracker "Dérogations courriel INTERNET non ministériel"
+👉 https://forge.intradef.gouv.fr/plugins/tracker/?tracker=19644
+
+---
+
+## 5. DÉROGATIONS ADMINISTRATEUR POSTE DE TRAVAIL INTERNET
+
+**Qui :** Tout utilisateur souhaitant obtenir les droits administrateur sur son poste de travail INTERNET
+
+**Action :** Formuler une demande de dérogation + signer l'attestation de reconnaissance de responsabilité spécifique **(APC IM 2004)**
+
+**Outil TULEAP :** Tracker "Dérogations admin INTERNET"
+👉 https://forge.intradef.gouv.fr/plugins/tracker/?tracker=15807
+
+**Durée de validité :** 12 mois maximum, jusqu'au 31 août suivant
+**Renouvellement :** Le CSSI passe le statut à *"Renouvellement de la dérogation à demander par le détenteur"* et sollicite le détenteur
+
+> ⚠️ En l'absence de renouvellement avant le 31 décembre, la dérogation expire automatiquement
+
+---
+
+## 6. SUIVI DES POSTES DE TRAVAIL INTERNET
+
+**Qui :** Chaque entité du PODEV
+
+**Action :** Contrôle interne de tous les postes de travail INTERNET (vérification de la bonne configuration et des engagements des détenteurs)
+
+**Fréquence :** Annuelle
+
+**Où rendre compte :** Outil de suivi TULEAP "Actions de contrôle interne" → artefact **"Suivi des postes de travail INTERNET"**
+
+> ⚠️ Attention particulière à porter aux postes de travail des **FREELANCES**
+
+---
+
+## 6. CAS PARTICULIER — MULTIBOOT
+
+**Qui :** Détenteur d'un poste de travail ayant installé un ou plusieurs autres systèmes d'exploitation
+
+**Action :**
+- Informer son CSSI de l'installation
+- Le CSSI crée un nouvel artefact dans l'outil de suivi TULEAP **"Dérogations admin INTERNET"** pour suivre ce système d'exploitation comme un poste de travail à part entière
+
+---
+
+## RÉCAPITULATIF DES FRÉQUENCES DE CONTRÔLE
+
+| Action | Fréquence | Responsable |
+|---|---|---|
+| Mises en place de développement | Semestrielle | Chaque entité PODEV |
+| Comptes et accès à privilèges INTERNET | Semestrielle | Chaque entité PODEV |
+| SI réalisés sur INTERNET | Semestrielle (contrôle) / Trimestrielle (mise à jour RRP) | Chaque entité PODEV / RRP |
+| Postes de travail INTERNET | Annuelle | Chaque entité PODEV |
