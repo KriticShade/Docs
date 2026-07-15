@@ -1,25 +1,27 @@
-:::writing block
-Objet : Limites de sécurisation de la box 5G HB410 avec ajout d’un Raspberry Pi
+Dans un premier temps, la box permet de mettre en place un socle minimal de sécurité. Il est possible de sécuriser l’accès à l’interface d’administration en modifiant les identifiants par défaut et en restreignant l’accès au réseau local. Certaines fonctions de gestion à distance peuvent également être désactivées afin de réduire la surface d’exposition.
 
-Bonjour,
+Concernant le WiFi, la box propose des mécanismes de protection standards tels que le chiffrement WPA2/WPA3, la définition d’un mot de passe robuste et la désactivation du WPS. Ces mesures permettent de contrôler l’accès au réseau sans pour autant garantir la sécurité des flux internes.
 
-Suite à l’analyse de l’architecture actuelle reposant sur la box 5G TP-Link/Aginet HB410 et une éventuelle intégration d’un Raspberry Pi pour renforcer la sécurité, plusieurs points bloquants ont été identifiés.
+La gestion de l’adressage IP via DHCP offre des შესაძლებლités limitées, notamment la réservation d’adresses IP pour certains équipements. Cela permet une identification basique des terminaux présents sur le réseau.
 
-Tout d’abord, la box 5G ne propose pas de mode bridge. Cela signifie qu’elle impose son propre routage et son NAT, empêchant tout équipement en aval (comme un Raspberry Pi) de devenir le point de contrôle principal du trafic réseau.
+La box intègre également des fonctions de filtrage simples, comme le filtrage MAC, le blocage de ports ou certaines règles basiques de restriction d’accès. Toutefois, ces mécanismes restent facilement contournables et ne permettent pas de mettre en place une politique de sécurité robuste.
 
-Ensuite, l’idée d’intercaler un Raspberry Pi entre l’antenne 5G (NE225) et la box n’est pas viable. La communication entre l’antenne et la box repose sur des mécanismes spécifiques (protocole opérateur, configuration réseau dédiée). L’ajout d’un équipement intermédiaire perturberait ce fonctionnement et entraînerait très probablement une perte de connectivité.
+En matière de journalisation, les capacités sont très limitées. Les logs disponibles sont peu détaillés, difficilement exploitables et ne permettent pas une supervision efficace du réseau.
 
-Par ailleurs, si le Raspberry Pi est positionné après la box, mais que les utilisateurs continuent de se connecter au WiFi de celle-ci, le trafic ne transitera pas par le Raspberry Pi. Dans ce cas, aucune politique de filtrage, de journalisation ou de détection ne pourra être appliquée de manière fiable.
+Par ailleurs, plusieurs limitations majeures empêchent d’atteindre un niveau de sécurité satisfaisant.
 
-De plus, les fonctionnalités de sécurité de la box restent limitées : absence de filtrage avancé, faible capacité de journalisation, impossibilité de mettre en place des politiques réseau fines (VLAN, segmentation, règles sortantes détaillées). Cela empêche d’atteindre un niveau de sécurité conforme aux bonnes pratiques.
+La box ne permet pas de contrôler finement les flux sortants. Il est impossible de définir des règles précises par équipement, par protocole ou par destination, ce qui limite fortement les capacités de prévention des communications malveillantes.
 
-Enfin, l’absence de maîtrise complète du flux réseau empêche toute mise en place efficace de mécanismes de sécurité avancés tels que l’inspection du trafic, la détection d’intrusion (IDS/IPS) ou le filtrage DNS centralisé.
+L’absence de segmentation réseau constitue également un point bloquant. Tous les équipements sont positionnés sur un même réseau, facilitant les mouvements latéraux en cas de compromission d’un terminal.
 
-En conclusion, l’association de la box 5G seule avec un Raspberry Pi ne permet pas de garantir un niveau de sécurité satisfaisant. Pour sécuriser efficacement l’infrastructure, il est nécessaire que l’ensemble du trafic réseau transite par un point de contrôle maîtrisé, ce qui implique soit l’ajout d’un équipement réseau intermédiaire (firewall + point d’accès WiFi), soit le remplacement de la box par un routeur 5G disposant de ფუნქctionnalités de sécurité avancées.
+Aucune fonctionnalité d’inspection du trafic (IDS/IPS) n’est disponible, ce qui empêche la détection d’activités suspectes ou d’attaques en cours.
 
-Je reste disponible pour proposer une architecture cible adaptée et sécurisée.
+Le contrôle des requêtes DNS est très limité, ne permettant pas de mettre en œuvre des mécanismes de filtrage efficaces contre les domaines malveillants.
 
-Cordialement,
-:::
+De plus, la visibilité globale sur le réseau est insuffisante. Il n’est pas possible d’obtenir une vue détaillée des flux (type NetFlow ou équivalent), ce qui rend difficile toute analyse ou détection d’anomalies.
 
-Si tu veux, je peux aussi te faire une version plus “direction” (plus synthétique / orientée décision) ou une version encore plus technique pour un RSSI 👍
+Enfin, l’impossibilité d’activer un mode bridge impose l’utilisation du NAT intégré à la box, empêchant la mise en place d’un équipement de sécurité en frontal capable de contrôler l’ensemble du trafic.
+
+En conclusion, la box HB410 permet uniquement de mettre en place des mesures de sécurité basiques centrées sur l’accès, mais ne permet pas d’assurer une sécurisation complète du réseau ni une supervision efficace des flux.
+
+Je reste disponible pour proposer une architecture alternative permettant de répondre aux exigences de sécurité.
