@@ -1,0 +1,25 @@
+:::writing block
+Objet : Limites de sécurisation de la box 5G HB410 avec ajout d’un Raspberry Pi
+
+Bonjour,
+
+Suite à l’analyse de l’architecture actuelle reposant sur la box 5G TP-Link/Aginet HB410 et une éventuelle intégration d’un Raspberry Pi pour renforcer la sécurité, plusieurs points bloquants ont été identifiés.
+
+Tout d’abord, la box 5G ne propose pas de mode bridge. Cela signifie qu’elle impose son propre routage et son NAT, empêchant tout équipement en aval (comme un Raspberry Pi) de devenir le point de contrôle principal du trafic réseau.
+
+Ensuite, l’idée d’intercaler un Raspberry Pi entre l’antenne 5G (NE225) et la box n’est pas viable. La communication entre l’antenne et la box repose sur des mécanismes spécifiques (protocole opérateur, configuration réseau dédiée). L’ajout d’un équipement intermédiaire perturberait ce fonctionnement et entraînerait très probablement une perte de connectivité.
+
+Par ailleurs, si le Raspberry Pi est positionné après la box, mais que les utilisateurs continuent de se connecter au WiFi de celle-ci, le trafic ne transitera pas par le Raspberry Pi. Dans ce cas, aucune politique de filtrage, de journalisation ou de détection ne pourra être appliquée de manière fiable.
+
+De plus, les fonctionnalités de sécurité de la box restent limitées : absence de filtrage avancé, faible capacité de journalisation, impossibilité de mettre en place des politiques réseau fines (VLAN, segmentation, règles sortantes détaillées). Cela empêche d’atteindre un niveau de sécurité conforme aux bonnes pratiques.
+
+Enfin, l’absence de maîtrise complète du flux réseau empêche toute mise en place efficace de mécanismes de sécurité avancés tels que l’inspection du trafic, la détection d’intrusion (IDS/IPS) ou le filtrage DNS centralisé.
+
+En conclusion, l’association de la box 5G seule avec un Raspberry Pi ne permet pas de garantir un niveau de sécurité satisfaisant. Pour sécuriser efficacement l’infrastructure, il est nécessaire que l’ensemble du trafic réseau transite par un point de contrôle maîtrisé, ce qui implique soit l’ajout d’un équipement réseau intermédiaire (firewall + point d’accès WiFi), soit le remplacement de la box par un routeur 5G disposant de ფუნქctionnalités de sécurité avancées.
+
+Je reste disponible pour proposer une architecture cible adaptée et sécurisée.
+
+Cordialement,
+:::
+
+Si tu veux, je peux aussi te faire une version plus “direction” (plus synthétique / orientée décision) ou une version encore plus technique pour un RSSI 👍
