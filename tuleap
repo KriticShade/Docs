@@ -1,0 +1,47 @@
+2.2.3.	Tuleap
+Ce TULEAP regroupe des outils de suivi facilitant la mise à jour et le partage de différents registres d'informations nécessaires à utilisation maîtrisée de différents outils du PODEV. En particulier, le recours à INTERNET pour différents besoins, et les mises en place communes à l'ensemble du PODEV nécessitent la mise en place d'outils communs.
+
+2.2.3.1.	Mises en place de développement
+	ACTEURS : Développeurs & RRP ;
+	OBJECTIF : Décrire dans l'outil de suivi TULEAP "Mises en place de développement" son contexte de travail ;
+	ACTIONS À RÉALISER :
+
+•	Chaque développeur doit renseigner un artefact (une ligne) pour chaque SI sur lequel il travaille. S'il travaille sur 3 SI différents, renseigner 3 artefacts ;
+•	Chaque développeur doit renseigner lui-même dans TULEAP les artefacts qui le concernent (il doit être l'auteur de l'artefact) ;
+•	Chaque développeur renseigne à chaque fois le RRP du SI dont il détaille la mise en place. Cela permet de s'assurer que l'information est bien partagée, et de faciliter le travail de suivi.
+•	A chaque fois que vous sélectionner l'option "Autre", préciser en commentaire ;
+2.2.3.2.	SI réalisés sur INTERNET
+	ACTEURS : RRP ;
+	OBJECTIFS : Déclarer les SI développés sur/à l’aide d’internet ;
+	ACTIONS À RÉALISER :
+•	Pour un SI développé sur internet (CPIN) :
+Renseigner TOUTES les informations nécessaires sur l’outil n°3 du TULEAP, et sélectionner "Demande à valider par l'OSSI" pour le champ "Validation de la demande" ;
+•	Pour un SI développé sur PICSEL / INTRADEF :
+o	Cas n°1 : Les UX élaborent des maquettes sur une solution SaaS internet ; 
+Renseigner PARTIELLEMENT les informations nécessaires sur l’outil n°3 du TULEAP, et sélectionner "Demande à valider par l'OSSI" pour le champ "Validation de la demande" soit :
+	Nom du SI ;
+	Entité ;
+	Désignation RRP ;
+	Activité actuelle sur le SI ;
+	Justification de validation DA/DP + nom RCP (garder un mail justificatif de celui-ci en attente du rajout des PJ dans le formulaire) ;
+	Type d’utilisation « Travaux d’UX impliquant l’utilisation d’un outil SAAS sur INTERNET » ;
+	Outils SAAS d’UX utilisés ;
+	Plateforme de développement utilisée ;
+	Validation de la demande ;
+	Etat de l’artefact ;
+
+o	Cas n°2 : Les UX n’élaborent pas de maquette sur une solution SaaS internet ;
+Aucune action à réaliser ;
+2.2.3.3.	Dérogation ADMIN INTERNET (postes internet)
+	ACTEURS : RRP ;
+	OBJECTIF : Demander un poste internet NP pour du personnel ;
+	ACTIONS À RÉALISER :
+
+Fournir au CSSI par mail les informations suivantes :
+•	Nom ;
+•	Prénom ;
+•	ID de la machine (@MAC + n°Série) ;
+•	Système d’exploitation (WINDOWS / LINUX / MACOS / AUTRE) ;
+•	Nom de l’utilisateur admin (nom session admin);
+•	Nom de l’utilisateur (session utilisateur) ;
+•	Justification du besoin (Pour un projet CPIN, machine locale, etc..)
