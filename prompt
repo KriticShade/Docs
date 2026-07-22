@@ -1,6 +1,0 @@
-Inverse la colonne de gauche avec la colonne de droite,tu fais une auto ajustement des cellules pour quelle soit le plus petite possible et pouvant tout voir quand même, taille d'écriture 10 et en grasles couleurs des cellules en haut sont en nuances :
-183  222  232),  # Bleu
-216  228  188),  # Vert
-252 213   180),  # Orange
-230  184  183),  # Rose foncé
-204  192  218)   # Violet foncéla collonne de gauche avec les r et rw en nuance de gris et blanc
