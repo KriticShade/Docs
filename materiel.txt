@@ -1,0 +1,82 @@
+Oui, mais il faut distinguer :
+
+- **Conforme aux normes européennes (marquage CE/RED)** ;
+- **Fabricant européen** ;
+- **Fabriqué en Europe**.
+
+Les trois ne sont pas équivalents. Si vous excluez réellement les fabricants chinois et américains, les choix deviennent plus limités.
+
+## Option économique recommandée
+
+### 1. Routeur 5G : Teltonika RUTX50
+
+Fabricant lituanien, double SIM, connecteurs pour antenne externe et fonctions réseau professionnelles. Il reste toutefois relativement cher. ([wiki.teltonika-networks.com](https://wiki.teltonika-networks.com/view/RUT241?utm_source=openai))
+
+Pour réduire le budget :
+
+### Alternative : Teltonika RUT241
+
+- Fabricant lituanien ;
+- Beaucoup moins cher ;
+- Double SIM ;
+- Antennes externes ;
+- VLAN, VPN, pare-feu basique ;
+- **Mais uniquement 4G LTE**, pas 5G. ([wiki.teltonika-networks.com](https://wiki.teltonika-networks.com/view/RUT241?utm_source=openai))
+
+➡️ Pour 30 utilisateurs, une bonne 4G peut suffire si les usages sont bureautiques.
+
+## Attention aux routeurs Zyxel
+
+Les modèles **Zyxel FWA70/FWA710** sont intéressants techniquement et prévus pour une installation extérieure, mais Zyxel est un fabricant taïwanais. Ils ne répondent donc pas à votre critère strict de fabricant européen, même s’ils sont commercialisés en Europe et conformes aux exigences européennes. ([zyxel.com](https://www.zyxel.com/fr/fr/products/fixed-wireless-access?utm_source=openai))
+
+## Équipements moins coûteux
+
+| Fonction | Choix économique | Origine fabricant |
+|---|---|---|
+| Routeur 5G | Teltonika RUTX50 | Lituanie |
+| Routeur 4G économique | Teltonika RUT241 | Lituanie |
+| Pare-feu | Netgate avec logiciel OPNsense | États-Unis, donc à éviter selon votre critère |
+| Pare-feu européen | Stormshield SN160/SN170 | France |
+| Switch PoE | LANCOM GS-2352P ou GS-3510XP | Allemagne |
+| Points d’accès | LANCOM LX-6200/LX-6400 | Allemagne |
+| Onduleur | Eaton ou Riello | Europe |
+
+## Architecture économique réaliste
+
+### Si la 4G est suffisante
+
+```text
+Teltonika RUT241
+        ↓
+Stormshield SN160
+        ↓
+Switch PoE LANCOM
+        ↓
+3 à 4 points d’accès LANCOM
+```
+
+### Si la 5G est indispensable
+
+```text
+Antenne 5G extérieure
+        ↓
+Teltonika RUTX50
+        ↓
+Stormshield SN160/SN170
+        ↓
+Switch PoE LANCOM
+        ↓
+Points d’accès LANCOM
+```
+
+## Mon avis RSSI
+
+Le meilleur compromis serait :
+
+- **RUT241** si vous acceptez la 4G ;
+- **RUTX50** si la 5G est obligatoire ;
+- **Stormshield SN160 ou SN170** ;
+- **3 points d’accès LANCOM** plutôt que 4, après étude radio ;
+- VLAN séparés : professionnel, invités, administration et IoT.
+
+Je déconseille de remplacer le pare-feu par celui intégré au routeur 5G : il est préférable de conserver un pare-feu dédié.
